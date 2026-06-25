@@ -1,7 +1,8 @@
 mod api;
 
 use api::{
-    HomeFeedResult, RemoteSettingResult, SearchAlbumsResult, WeekFiltersResult, WeekItemsResult,
+    ComicCommentsResult, ComicDetailResult, HomeFeedResult, RemoteSettingResult,
+    SearchAlbumsResult, WeekFiltersResult, WeekItemsResult,
 };
 
 #[tauri::command]
@@ -48,6 +49,27 @@ async fn get_week_items(
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+async fn get_comic_detail(
+    comic_id: String,
+    endpoint: Option<String>,
+) -> Result<ComicDetailResult, String> {
+    api::get_comic_detail(comic_id, endpoint)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn get_comic_comments(
+    comic_id: String,
+    page: Option<u32>,
+    endpoint: Option<String>,
+) -> Result<ComicCommentsResult, String> {
+    api::get_comic_comments(comic_id, page, endpoint)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -57,7 +79,9 @@ pub fn run() {
             search_comics,
             get_home_feed,
             get_week_filters,
-            get_week_items
+            get_week_items,
+            get_comic_detail,
+            get_comic_comments
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

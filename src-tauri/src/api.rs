@@ -87,7 +87,10 @@ struct SearchContentItem {
     image: String,
     category: Option<SearchCategory>,
     category_sub: Option<SearchCategory>,
-    #[serde(default, deserialize_with = "deserialize_optional_i64_from_string_or_number")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_i64_from_string_or_number"
+    )]
     update_at: Option<i64>,
 }
 
@@ -106,7 +109,10 @@ struct ComicListItemPayload {
     image: String,
     category: Option<SearchCategory>,
     category_sub: Option<SearchCategory>,
-    #[serde(default, deserialize_with = "deserialize_optional_i64_from_string_or_number")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_i64_from_string_or_number"
+    )]
     update_at: Option<i64>,
 }
 
@@ -148,6 +154,117 @@ struct WeekComicsPayload {
     #[serde(deserialize_with = "deserialize_u32_from_string_or_number")]
     total: u32,
     list: Vec<ComicListItemPayload>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ComicDetailPayload {
+    #[serde(deserialize_with = "deserialize_string_from_string_or_number")]
+    id: String,
+    name: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default, deserialize_with = "deserialize_string_vec_from_any")]
+    author: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_u32_from_any")]
+    total_views: u32,
+    #[serde(default, deserialize_with = "deserialize_u32_from_any")]
+    likes: u32,
+    #[serde(default, deserialize_with = "deserialize_u32_from_any")]
+    comment_total: u32,
+    #[serde(default, deserialize_with = "deserialize_string_vec_from_any")]
+    tags: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_string_vec_from_any")]
+    actors: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_string_vec_from_any")]
+    works: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_bool_from_any")]
+    is_favorite: bool,
+    #[serde(default, deserialize_with = "deserialize_bool_from_any")]
+    liked: bool,
+    #[serde(default)]
+    related_list: Vec<ComicDetailRelatedPayload>,
+    #[serde(default)]
+    series: Vec<ComicDetailSeriesPayload>,
+    #[serde(default, deserialize_with = "deserialize_string_from_any")]
+    series_id: String,
+    #[serde(default, deserialize_with = "deserialize_u32_from_any")]
+    price: u32,
+    #[serde(default, deserialize_with = "deserialize_bool_from_any")]
+    purchased: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct ComicDetailRelatedPayload {
+    #[serde(deserialize_with = "deserialize_string_from_string_or_number")]
+    id: String,
+    name: String,
+    #[serde(default)]
+    author: String,
+    #[serde(default)]
+    image: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ComicDetailSeriesPayload {
+    #[serde(deserialize_with = "deserialize_string_from_string_or_number")]
+    id: String,
+    name: String,
+    #[serde(default, deserialize_with = "deserialize_string_from_any")]
+    sort: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CommentListPayload {
+    #[serde(default)]
+    list: Vec<CommentPayload>,
+    #[serde(default, deserialize_with = "deserialize_u32_from_any")]
+    total: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct CommentPayload {
+    #[serde(
+        default,
+        rename = "AID",
+        deserialize_with = "deserialize_optional_string_from_any"
+    )]
+    aid: Option<String>,
+    #[serde(
+        default,
+        rename = "CID",
+        deserialize_with = "deserialize_string_from_any"
+    )]
+    cid: String,
+    #[serde(
+        default,
+        rename = "UID",
+        deserialize_with = "deserialize_string_from_any"
+    )]
+    uid: String,
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    nickname: String,
+    #[serde(default, deserialize_with = "deserialize_u32_from_any")]
+    likes: u32,
+    #[serde(default)]
+    update_at: String,
+    #[serde(default)]
+    addtime: String,
+    #[serde(
+        default,
+        rename = "parent_CID",
+        deserialize_with = "deserialize_string_from_any"
+    )]
+    parent_cid: String,
+    #[serde(default)]
+    content: String,
+    #[serde(default)]
+    photo: String,
+    #[serde(default, deserialize_with = "deserialize_bool_from_any")]
+    spoiler: bool,
+    #[serde(default)]
+    replys: Option<Vec<CommentPayload>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -222,6 +339,84 @@ pub struct WeekItemsResult {
     pub page: u32,
     pub total: u32,
     pub items: Vec<FeedComic>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ComicDetailResult {
+    pub endpoint: String,
+    pub comic: ComicDetail,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ComicDetail {
+    pub id: String,
+    pub title: String,
+    pub author: Vec<String>,
+    pub description: String,
+    #[serde(rename = "totalViews")]
+    pub total_views: u32,
+    pub likes: u32,
+    #[serde(rename = "commentTotal")]
+    pub comment_total: u32,
+    pub tags: Vec<String>,
+    pub actors: Vec<String>,
+    pub works: Vec<String>,
+    #[serde(rename = "isFavorite")]
+    pub is_favorite: bool,
+    pub liked: bool,
+    #[serde(rename = "relatedList")]
+    pub related_list: Vec<RelatedComic>,
+    pub series: Vec<ComicChapter>,
+    #[serde(rename = "seriesId")]
+    pub series_id: String,
+    pub price: u32,
+    pub purchased: bool,
+    pub image: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RelatedComic {
+    pub id: String,
+    pub title: String,
+    pub author: String,
+    pub image: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ComicChapter {
+    pub id: String,
+    pub title: String,
+    pub sort: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ComicCommentsResult {
+    pub endpoint: String,
+    pub page: u32,
+    pub total: u32,
+    pub comments: Vec<ComicComment>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ComicComment {
+    pub id: String,
+    #[serde(rename = "comicId")]
+    pub comic_id: Option<String>,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    pub username: String,
+    pub nickname: String,
+    pub content: String,
+    #[serde(rename = "likeCount")]
+    pub like_count: u32,
+    pub time: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    pub avatar: String,
+    #[serde(rename = "parentId")]
+    pub parent_id: String,
+    pub spoiler: bool,
+    pub replies: Vec<ComicComment>,
 }
 
 #[derive(Debug, Serialize)]
@@ -389,6 +584,81 @@ pub async fn get_week_items(
             .list
             .into_iter()
             .map(|item| map_feed_comic(item, img_host.as_deref()))
+            .collect(),
+    })
+}
+
+pub async fn get_comic_detail(
+    comic_id: String,
+    endpoint: Option<String>,
+) -> ApiResult<ComicDetailResult> {
+    let comic_id = comic_id.trim().to_string();
+
+    if comic_id.is_empty() {
+        return Err(ApiError::new(
+            ApiErrorKind::MissingData,
+            "Comic detail needs a comic_id",
+        ));
+    }
+
+    let endpoint = resolve_api_endpoint(endpoint)?;
+    let client = build_http_client()?;
+    let auth = ApiAuth::current();
+    let img_host_future = request_remote_img_host(&client, endpoint, &auth);
+    let payload_future = request_comic_detail(&client, endpoint, &comic_id, &auth);
+    let (img_host_result, payload_result) = tokio::join!(img_host_future, payload_future);
+    let img_host = match img_host_result {
+        Ok(img_host) => Some(img_host),
+        Err(error) => {
+            eprintln!("Failed to load remote setting for detail images: {error}");
+            None
+        }
+    };
+
+    Ok(ComicDetailResult {
+        endpoint: endpoint.to_string(),
+        comic: map_comic_detail(payload_result?, img_host.as_deref()),
+    })
+}
+
+pub async fn get_comic_comments(
+    comic_id: String,
+    page: Option<u32>,
+    endpoint: Option<String>,
+) -> ApiResult<ComicCommentsResult> {
+    let comic_id = comic_id.trim().to_string();
+    let page = page.unwrap_or(1);
+
+    if comic_id.is_empty() {
+        return Err(ApiError::new(
+            ApiErrorKind::MissingData,
+            "Comic comments need a comic_id",
+        ));
+    }
+
+    let endpoint = resolve_api_endpoint(endpoint)?;
+    let client = build_http_client()?;
+    let auth = ApiAuth::current();
+    let img_host_future = request_remote_img_host(&client, endpoint, &auth);
+    let payload_future = request_comic_comments(&client, endpoint, &comic_id, page, &auth);
+    let (img_host_result, payload_result) = tokio::join!(img_host_future, payload_future);
+    let img_host = match img_host_result {
+        Ok(img_host) => Some(img_host),
+        Err(error) => {
+            eprintln!("Failed to load remote setting for comment avatars: {error}");
+            None
+        }
+    };
+    let payload = payload_result?;
+
+    Ok(ComicCommentsResult {
+        endpoint: endpoint.to_string(),
+        page,
+        total: payload.total,
+        comments: payload
+            .list
+            .into_iter()
+            .map(|comment| map_comment(comment, img_host.as_deref()))
             .collect(),
     })
 }
@@ -583,6 +853,43 @@ async fn request_week_comics(
     .await
 }
 
+async fn request_comic_detail(
+    client: &reqwest::Client,
+    endpoint: &str,
+    comic_id: &str,
+    auth: &ApiAuth,
+) -> ApiResult<ComicDetailPayload> {
+    request_api_data(
+        client,
+        endpoint,
+        "album",
+        &[("id", comic_id.to_string())],
+        auth,
+    )
+    .await
+}
+
+async fn request_comic_comments(
+    client: &reqwest::Client,
+    endpoint: &str,
+    comic_id: &str,
+    page: u32,
+    auth: &ApiAuth,
+) -> ApiResult<CommentListPayload> {
+    request_api_data(
+        client,
+        endpoint,
+        "forum",
+        &[
+            ("page", page.to_string()),
+            ("aid", comic_id.to_string()),
+            ("mode", "manhua".to_string()),
+        ],
+        auth,
+    )
+    .await
+}
+
 async fn request_api_data<T>(
     client: &reqwest::Client,
     endpoint: &str,
@@ -714,6 +1021,77 @@ fn map_feed_comic(item: ComicListItemPayload, img_host: Option<&str>) -> FeedCom
     }
 }
 
+fn map_comic_detail(payload: ComicDetailPayload, img_host: Option<&str>) -> ComicDetail {
+    let image = cover_image_url(img_host, &payload.id).unwrap_or_default();
+
+    ComicDetail {
+        id: payload.id,
+        title: payload.name,
+        author: payload.author,
+        description: payload.description,
+        total_views: payload.total_views,
+        likes: payload.likes,
+        comment_total: payload.comment_total,
+        tags: payload.tags,
+        actors: payload.actors,
+        works: payload.works,
+        is_favorite: payload.is_favorite,
+        liked: payload.liked,
+        related_list: payload
+            .related_list
+            .into_iter()
+            .map(|item| map_related_comic(item, img_host))
+            .collect(),
+        series: payload
+            .series
+            .into_iter()
+            .map(|item| ComicChapter {
+                id: item.id,
+                title: item.name,
+                sort: item.sort,
+            })
+            .collect(),
+        series_id: payload.series_id,
+        price: payload.price,
+        purchased: payload.purchased,
+        image,
+    }
+}
+
+fn map_related_comic(item: ComicDetailRelatedPayload, img_host: Option<&str>) -> RelatedComic {
+    let image = cover_image_url(img_host, &item.id).unwrap_or(item.image);
+
+    RelatedComic {
+        id: item.id,
+        title: item.name,
+        author: item.author,
+        image,
+    }
+}
+
+fn map_comment(payload: CommentPayload, img_host: Option<&str>) -> ComicComment {
+    ComicComment {
+        id: payload.cid,
+        comic_id: payload.aid,
+        user_id: payload.uid,
+        username: payload.username,
+        nickname: payload.nickname,
+        content: payload.content,
+        like_count: payload.likes,
+        time: payload.addtime,
+        updated_at: payload.update_at,
+        avatar: user_avatar_url(img_host, &payload.photo).unwrap_or_default(),
+        parent_id: payload.parent_cid,
+        spoiler: payload.spoiler,
+        replies: payload
+            .replys
+            .unwrap_or_default()
+            .into_iter()
+            .map(|reply| map_comment(reply, img_host))
+            .collect(),
+    }
+}
+
 fn map_week_categories(categories: Vec<WeekCategoryPayload>) -> Vec<WeekCategory> {
     categories
         .into_iter()
@@ -782,6 +1160,31 @@ where
     }
 }
 
+fn deserialize_u32_from_any<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+
+    match value {
+        serde_json::Value::Number(number) => number
+            .as_u64()
+            .and_then(|value| u32::try_from(value).ok())
+            .ok_or_else(|| serde::de::Error::custom("expected a valid u32 number")),
+        serde_json::Value::String(value) => {
+            let value = value.trim();
+
+            if value.is_empty() {
+                return Ok(0);
+            }
+
+            Ok(value.parse::<u32>().unwrap_or_default())
+        }
+        serde_json::Value::Null => Ok(0),
+        _ => Err(serde::de::Error::custom("expected a u32-compatible value")),
+    }
+}
+
 fn deserialize_string_from_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -792,6 +1195,100 @@ where
         serde_json::Value::String(value) => Ok(value),
         serde_json::Value::Number(value) => Ok(value.to_string()),
         _ => Err(serde::de::Error::custom("expected a string or number")),
+    }
+}
+
+fn deserialize_string_from_any<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+
+    match value {
+        serde_json::Value::String(value) => Ok(value),
+        serde_json::Value::Number(value) => Ok(value.to_string()),
+        serde_json::Value::Bool(value) => Ok(value.to_string()),
+        serde_json::Value::Null => Ok(String::new()),
+        _ => Err(serde::de::Error::custom("expected a scalar value")),
+    }
+}
+
+fn deserialize_optional_string_from_any<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    let Some(value) = value else {
+        return Ok(None);
+    };
+
+    match value {
+        serde_json::Value::String(value) => {
+            if value.trim().is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(value))
+            }
+        }
+        serde_json::Value::Number(value) => Ok(Some(value.to_string())),
+        serde_json::Value::Bool(value) => Ok(Some(value.to_string())),
+        serde_json::Value::Null => Ok(None),
+        _ => Err(serde::de::Error::custom(
+            "expected an optional scalar value",
+        )),
+    }
+}
+
+fn deserialize_string_vec_from_any<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+
+    match value {
+        serde_json::Value::Array(items) => {
+            let values = items
+                .into_iter()
+                .filter_map(|item| match item {
+                    serde_json::Value::String(value) => Some(value),
+                    serde_json::Value::Number(value) => Some(value.to_string()),
+                    serde_json::Value::Bool(value) => Some(value.to_string()),
+                    _ => None,
+                })
+                .filter(|value| !value.trim().is_empty())
+                .collect::<Vec<_>>();
+
+            Ok(values)
+        }
+        serde_json::Value::String(value) => {
+            if value.trim().is_empty() {
+                Ok(Vec::new())
+            } else {
+                Ok(vec![value])
+            }
+        }
+        serde_json::Value::Number(value) => Ok(vec![value.to_string()]),
+        serde_json::Value::Null => Ok(Vec::new()),
+        _ => Err(serde::de::Error::custom("expected a string list")),
+    }
+}
+
+fn deserialize_bool_from_any<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+
+    match value {
+        serde_json::Value::Bool(value) => Ok(value),
+        serde_json::Value::Number(value) => Ok(value.as_u64().unwrap_or_default() != 0),
+        serde_json::Value::String(value) => {
+            let value = value.trim().to_ascii_lowercase();
+
+            Ok(matches!(value.as_str(), "1" | "true" | "yes" | "ok"))
+        }
+        serde_json::Value::Null => Ok(false),
+        _ => Err(serde::de::Error::custom("expected a bool-compatible value")),
     }
 }
 
@@ -854,6 +1351,30 @@ fn cover_image_url(img_host: Option<&str>, comic_id: &str) -> Option<String> {
     }
 
     Some(format!("{img_host}/media/albums/{comic_id}_3x4.jpg"))
+}
+
+fn user_avatar_url(img_host: Option<&str>, photo: &str) -> Option<String> {
+    let photo = photo.trim();
+
+    if photo.is_empty() {
+        return None;
+    }
+
+    if photo.starts_with("http://") || photo.starts_with("https://") {
+        return Some(photo.to_string());
+    }
+
+    let img_host = img_host?.trim().trim_end_matches('/');
+
+    if img_host.is_empty() {
+        return None;
+    }
+
+    if photo.starts_with('/') {
+        Some(format!("{img_host}{photo}"))
+    } else {
+        Some(format!("{img_host}/media/users/{photo}"))
+    }
 }
 
 fn response_preview(value: &str) -> String {

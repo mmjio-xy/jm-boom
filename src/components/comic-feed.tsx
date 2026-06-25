@@ -1,4 +1,5 @@
 import { ImageIcon, RefreshCwIcon } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -54,21 +55,27 @@ export function ComicGrid({ items }: { items: FeedComic[] }) {
 
 function ComicCard({ item }: { item: FeedComic }) {
   return (
-    <Card
-      size="sm"
-      className="gap-0 overflow-hidden py-0 transition-shadow hover:cursor-pointer hover:shadow-xl"
+    <Link
+      to="/comic/$comicId"
+      params={{ comicId: item.id }}
+      className="block focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
-      <ComicCover id={item.id} title={item.title} image={item.image} />
-      <CardContent className="space-y-1.5 p-3">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="truncate text-sm leading-5 font-semibold">{item.title}</div>
-          </TooltipTrigger>
-          <TooltipContent>{item.title}</TooltipContent>
-        </Tooltip>
-        <p className="line-clamp-1 text-xs text-muted-foreground">{item.author || 'N/A'}</p>
-      </CardContent>
-    </Card>
+      <Card
+        size="sm"
+        className="gap-0 overflow-hidden py-0 transition-shadow hover:cursor-pointer hover:shadow-xl"
+      >
+        <ComicCover id={item.id} title={item.title} image={item.image} />
+        <CardContent className="space-y-1.5 p-3">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="truncate text-sm leading-5 font-semibold">{item.title}</div>
+            </TooltipTrigger>
+            <TooltipContent>{item.title}</TooltipContent>
+          </Tooltip>
+          <p className="line-clamp-1 text-xs text-muted-foreground">{item.author || 'N/A'}</p>
+        </CardContent>
+      </Card>
+    </Link>
   )
 }
 

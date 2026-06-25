@@ -14,6 +14,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppWeeklyRouteImport } from './routes/_app/weekly'
 import { Route as AppMeRouteImport } from './routes/_app/me'
 import { Route as AppFavoritesRouteImport } from './routes/_app/favorites'
+import { Route as AppComicComicIdRouteImport } from './routes/_app/comic/$comicId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -39,18 +40,25 @@ const AppFavoritesRoute = AppFavoritesRouteImport.update({
   path: '/favorites',
   getParentRoute: () => AppRoute,
 } as any)
+const AppComicComicIdRoute = AppComicComicIdRouteImport.update({
+  id: '/comic/$comicId',
+  path: '/comic/$comicId',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/favorites': typeof AppFavoritesRoute
   '/me': typeof AppMeRoute
   '/weekly': typeof AppWeeklyRoute
+  '/comic/$comicId': typeof AppComicComicIdRoute
 }
 export interface FileRoutesByTo {
   '/favorites': typeof AppFavoritesRoute
   '/me': typeof AppMeRoute
   '/weekly': typeof AppWeeklyRoute
   '/': typeof AppIndexRoute
+  '/comic/$comicId': typeof AppComicComicIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -59,12 +67,13 @@ export interface FileRoutesById {
   '/_app/me': typeof AppMeRoute
   '/_app/weekly': typeof AppWeeklyRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/comic/$comicId': typeof AppComicComicIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/favorites' | '/me' | '/weekly'
+  fullPaths: '/' | '/favorites' | '/me' | '/weekly' | '/comic/$comicId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/favorites' | '/me' | '/weekly' | '/'
+  to: '/favorites' | '/me' | '/weekly' | '/' | '/comic/$comicId'
   id:
     | '__root__'
     | '/_app'
@@ -72,6 +81,7 @@ export interface FileRouteTypes {
     | '/_app/me'
     | '/_app/weekly'
     | '/_app/'
+    | '/_app/comic/$comicId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -115,6 +125,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFavoritesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/comic/$comicId': {
+      id: '/_app/comic/$comicId'
+      path: '/comic/$comicId'
+      fullPath: '/comic/$comicId'
+      preLoaderRoute: typeof AppComicComicIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -123,6 +140,7 @@ interface AppRouteChildren {
   AppMeRoute: typeof AppMeRoute
   AppWeeklyRoute: typeof AppWeeklyRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppComicComicIdRoute: typeof AppComicComicIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -130,6 +148,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMeRoute: AppMeRoute,
   AppWeeklyRoute: AppWeeklyRoute,
   AppIndexRoute: AppIndexRoute,
+  AppComicComicIdRoute: AppComicComicIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
