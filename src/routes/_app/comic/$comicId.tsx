@@ -1,26 +1,42 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import {
   ArrowLeftIcon,
   BookOpenIcon,
   BookmarkIcon,
+  ChevronUpIcon,
   DownloadIcon,
   EyeIcon,
   HeartIcon,
   ImageIcon,
   LayersIcon,
+  LoaderCircleIcon,
   MessageCircleIcon,
-  ThumbsUpIcon,
   UserRoundIcon,
   type LucideIcon
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { StatePanel } from '@/components/comic-feed'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle
+} from '@/components/ui/drawer'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious
+} from '@/components/ui/pagination'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -39,6 +55,7 @@ export const Route = createFileRoute('/_app/comic/$comicId')({
 
 const DETAIL_STALE_TIME = 10 * 60 * 1000
 const COMMENTS_STALE_TIME = 2 * 60 * 1000
+const CHAPTER_PAGE_SIZE = 10
 const SHOW_COVER_MASK = true
 
 function ComicDetailPage() {
@@ -49,12 +66,6 @@ function ComicDetailPage() {
     queryKey: ['jm-comic-detail', comicId],
     queryFn: () => getComicDetail(comicId),
     staleTime: DETAIL_STALE_TIME
-  })
-
-  const comments = useQuery({
-    queryKey: ['jm-comic-comments', comicId, 1],
-    queryFn: () => getComicComments({ comicId }),
-    staleTime: COMMENTS_STALE_TIME
   })
 
   return (
@@ -76,49 +87,80 @@ function ComicDetailPage() {
         ) : detail.data == null ? (
           <StatePanel title="暂无详情" description="当前作品没有返回可展示的详情。" />
         ) : (
-          <ComicDetailView
-            comic={detail.data.comic}
-            commentsState={{
-              isLoading: comments.isLoading,
-              isError: comments.isError,
-              errorMessage: comments.error?.message,
-              total: comments.data?.total ?? detail.data.comic.commentTotal,
-              comments: comments.data?.comments ?? [],
-              onRetry: () => comments.refetch()
-            }}
-          />
+          <ComicDetailView comic={detail.data.comic} />
         )}
       </div>
+      <BackTop />
     </main>
   )
 }
 
-function ComicDetailView({
-  comic,
-  commentsState
-}: {
-  comic: ComicDetail
-  commentsState: CommentsState
-}) {
+function ComicDetailView({ comic }: { comic: ComicDetail }) {
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false)
+
+  const commentsQuery = useInfiniteQuery({
+    queryKey: ['jm-comic-comments', comic.id],
+    queryFn: ({ pageParam }) => getComicComments({ comicId: comic.id, page: pageParam }),
+    initialPageParam: 1,
+    enabled: isCommentsOpen,
+    staleTime: COMMENTS_STALE_TIME,
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedCount = allPages.reduce((sum, page) => sum + page.comments.length, 0)
+
+      if (lastPage.comments.length === 0 || loadedCount >= lastPage.total) {
+        return undefined
+      }
+
+      return lastPage.page + 1
+    }
+  })
+
+  const comments = useMemo(
+    () => commentsQuery.data?.pages.flatMap(page => page.comments) ?? [],
+    [commentsQuery.data]
+  )
+  const commentTotal = commentsQuery.data?.pages[0]?.total ?? comic.commentTotal
+
   return (
     <div className="space-y-10">
-      <ComicHero comic={comic} />
+      <ComicHero comic={comic} onCommentsClick={() => setIsCommentsOpen(true)} />
 
       <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-8">
-        <div className="min-w-0 space-y-8">
+        <div className="min-w-0">
           <ChaptersSection chapters={comic.series} />
-          <CommentsSection state={commentsState} />
         </div>
 
         <aside className="sticky top-8 h-fit">
           <RelatedPanel items={comic.relatedList} />
         </aside>
       </div>
+
+      <CommentsDrawer
+        open={isCommentsOpen}
+        onOpenChange={setIsCommentsOpen}
+        state={{
+          isLoading: commentsQuery.isLoading,
+          isFetchingNextPage: commentsQuery.isFetchingNextPage,
+          isError: commentsQuery.isError,
+          errorMessage: commentsQuery.error?.message,
+          total: commentTotal,
+          comments,
+          hasNextPage: commentsQuery.hasNextPage,
+          onRetry: () => commentsQuery.refetch(),
+          onLoadMore: () => commentsQuery.fetchNextPage({ cancelRefetch: false })
+        }}
+      />
     </div>
   )
 }
 
-function ComicHero({ comic }: { comic: ComicDetail }) {
+function ComicHero({
+  comic,
+  onCommentsClick
+}: {
+  comic: ComicDetail
+  onCommentsClick: () => void
+}) {
   const authors = comic.author.length > 0 ? comic.author.join(' / ') : 'N/A'
   const statusBadges = [
     comic.price > 0 ? `${comic.price} 积分` : '免费',
@@ -131,11 +173,12 @@ function ComicHero({ comic }: { comic: ComicDetail }) {
     <section className="grid grid-cols-[240px_minmax(0,1fr)] gap-8">
       <ComicCover id={comic.id} title={comic.title} image={comic.image} className="w-full" />
 
-        <div className="min-w-0 space-y-5 py-1">
-          <div className="flex flex-wrap items-center gap-2">
-            {statusBadges.map(badge => (
-              <Badge key={badge} variant="outline">
-                {badge}
+      <div className="min-w-0 space-y-5 py-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="default">JM {comic.id}</Badge>
+          {statusBadges.map(badge => (
+            <Badge key={badge} variant="outline">
+              {badge}
             </Badge>
           ))}
         </div>
@@ -150,7 +193,7 @@ function ComicHero({ comic }: { comic: ComicDetail }) {
 
         <Separator />
 
-        <StatsRow comic={comic} />
+        <StatsRow comic={comic} onCommentsClick={onCommentsClick} />
 
         <Separator />
 
@@ -183,28 +226,58 @@ function ComicHero({ comic }: { comic: ComicDetail }) {
   )
 }
 
-function StatsRow({ comic }: { comic: ComicDetail }) {
-  const stats: Array<{ label: string; value: string; icon: LucideIcon }> = [
-    { label: '浏览', value: formatNumber(comic.totalViews), icon: EyeIcon },
-    { label: '喜欢', value: formatNumber(comic.likes), icon: HeartIcon },
-    { label: '评论', value: formatNumber(comic.commentTotal), icon: MessageCircleIcon },
-    { label: '章节', value: formatNumber(comic.series.length), icon: LayersIcon }
+function StatsRow({ comic, onCommentsClick }: { comic: ComicDetail; onCommentsClick: () => void }) {
+  const stats: Array<{
+    id: string
+    label: string
+    value: string
+    icon: LucideIcon
+    onClick?: () => void
+  }> = [
+    { id: 'views', label: '浏览', value: formatNumber(comic.totalViews), icon: EyeIcon },
+    { id: 'likes', label: '喜欢', value: formatNumber(comic.likes), icon: HeartIcon },
+    {
+      id: 'comments',
+      label: '评论',
+      value: formatNumber(comic.commentTotal),
+      icon: MessageCircleIcon,
+      onClick: onCommentsClick
+    },
+    { id: 'chapters', label: '章节', value: formatNumber(comic.series.length), icon: LayersIcon }
   ]
 
   return (
     <div className="flex items-stretch rounded-md bg-card/60 text-center text-sm">
-      {stats.map((stat, index) => (
-        <div key={stat.label} className="flex min-w-0 flex-1 items-center">
-          <div className="flex min-w-0 flex-1 flex-col items-center justify-center space-y-1 p-4">
+      {stats.map((stat, index) => {
+        const content = (
+          <>
             <div className="flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
               <stat.icon className="size-4" />
               {stat.label}
             </div>
             <div className="text-xl font-semibold">{stat.value}</div>
+          </>
+        )
+
+        return (
+          <div key={stat.id} className="flex min-w-0 flex-1 items-stretch">
+            {stat.onClick ? (
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 cursor-pointer flex-col items-center justify-center space-y-1 rounded-sm p-4 transition-colors hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                onClick={stat.onClick}
+              >
+                {content}
+              </button>
+            ) : (
+              <div className="flex min-w-0 flex-1 flex-col items-center justify-center space-y-1 p-4">
+                {content}
+              </div>
+            )}
+            {index < stats.length - 1 ? <Separator orientation="vertical" /> : null}
           </div>
-          {index < stats.length - 1 ? <Separator orientation="vertical" /> : null}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -236,52 +309,185 @@ function PillGroup({
 
 function ChaptersSection({ chapters }: { chapters: ComicChapter[] }) {
   const sortedChapters = useMemo(() => sortChapters(chapters), [chapters])
+  const [page, setPage] = useState(1)
+  const pageCount = Math.max(1, Math.ceil(sortedChapters.length / CHAPTER_PAGE_SIZE))
+  const safePage = Math.min(page, pageCount)
+  const visibleChapters = sortedChapters.slice(
+    (safePage - 1) * CHAPTER_PAGE_SIZE,
+    safePage * CHAPTER_PAGE_SIZE
+  )
+
+  useEffect(() => {
+    setPage(current => Math.min(current, pageCount))
+  }, [pageCount])
+
+  function changePage(nextPage: number) {
+    const clampedPage = Math.min(Math.max(nextPage, 1), pageCount)
+    setPage(clampedPage)
+    document.getElementById('chapters')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    })
+  }
 
   return (
-    <section className="space-y-4">
-      <SectionHeading title="章节" description={`${chapters.length} 个章节`} />
+    <section id="chapters" className="scroll-mt-8 space-y-4">
+      <SectionHeading
+        title="章节"
+        description={`${chapters.length} 个章节${pageCount > 1 ? `，第 ${safePage}/${pageCount} 页` : ''}`}
+      />
       {sortedChapters.length === 0 ? (
         <StatePanel title="暂无章节" description="当前作品没有返回章节列表。" />
       ) : (
-        <div className="space-y-2">
-          {sortedChapters.map((chapter, index) => (
-            <Card key={chapter.id} size="sm" className="py-0 transition-colors hover:bg-muted/40">
-              <CardContent className="flex items-center justify-between gap-4 p-4">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{chapter.title}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {chapter.sort ? `第 ${chapter.sort} 章` : `章节 ${index + 1}`}
+        <>
+          <div className="space-y-2">
+            {visibleChapters.map((chapter, index) => (
+              <Card key={chapter.id} size="sm" className="py-0 transition-colors hover:bg-muted/40">
+                <CardContent className="flex items-center justify-between gap-4 p-4">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{chapter.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {chapter.sort
+                        ? `第 ${chapter.sort} 章`
+                        : `章节 ${(safePage - 1) * CHAPTER_PAGE_SIZE + index + 1}`}
+                    </div>
                   </div>
-                </div>
-                <Badge variant="outline">JM {chapter.id}</Badge>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  <Badge variant="outline">JM {chapter.id}</Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {pageCount > 1 ? (
+            <ChapterPagination page={safePage} pageCount={pageCount} onPageChange={changePage} />
+          ) : null}
+        </>
       )}
     </section>
   )
 }
 
-function CommentsSection({ state }: { state: CommentsState }) {
+function ChapterPagination({
+  page,
+  pageCount,
+  onPageChange
+}: {
+  page: number
+  pageCount: number
+  onPageChange: (page: number) => void
+}) {
+  const pages = getVisiblePages(page, pageCount)
+
   return (
-    <section className="space-y-4">
-      <SectionHeading title="评论" description={`${formatNumber(state.total)} 条评论`} />
-      {state.isLoading ? (
-        <CommentSkeletonList />
-      ) : state.isError ? (
-        <StatePanel title="评论加载失败" description={state.errorMessage} onRetry={state.onRetry} />
-      ) : state.comments.length === 0 ? (
-        <StatePanel title="暂无评论" description="当前作品还没有返回评论内容。" />
-      ) : (
-        <div className="space-y-3">
-          {state.comments.map(comment => (
-            <CommentItem key={comment.id} comment={comment} />
-          ))}
-        </div>
-      )}
-    </section>
+    <Pagination className="pt-2">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious
+            href="#"
+            text="上一页"
+            className={cn(page === 1 && 'pointer-events-none opacity-50')}
+            onClick={event => {
+              event.preventDefault()
+              onPageChange(page - 1)
+            }}
+          />
+        </PaginationItem>
+        {pages.map((item, index) =>
+          item === 'ellipsis' ? (
+            <PaginationItem key={`ellipsis-${index}`}>
+              <PaginationEllipsis />
+            </PaginationItem>
+          ) : (
+            <PaginationItem key={item}>
+              <PaginationLink
+                href="#"
+                isActive={item === page}
+                onClick={event => {
+                  event.preventDefault()
+                  onPageChange(item)
+                }}
+              >
+                {item}
+              </PaginationLink>
+            </PaginationItem>
+          )
+        )}
+        <PaginationItem>
+          <PaginationNext
+            href="#"
+            text="下一页"
+            className={cn(page === pageCount && 'pointer-events-none opacity-50')}
+            onClick={event => {
+              event.preventDefault()
+              onPageChange(page + 1)
+            }}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
   )
+}
+
+function CommentsDrawer({
+  open,
+  onOpenChange,
+  state
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  state: CommentsState
+}) {
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange} direction="right">
+      <DrawerContent className="h-full w-[440px] overflow-hidden p-0 before:inset-0 before:rounded-none before:border-0 data-[vaul-drawer-direction=right]:w-[440px] data-[vaul-drawer-direction=right]:sm:max-w-[440px]">
+        <DrawerHeader>
+          <DrawerTitle>评论</DrawerTitle>
+          <DrawerDescription>共 {formatNumber(state.total)} 条评论</DrawerDescription>
+        </DrawerHeader>
+
+        <div
+          className="min-h-0 flex-1 overflow-y-auto px-6 pb-6"
+          onScroll={event => handleCommentsScroll(event.currentTarget, state)}
+        >
+          {state.isLoading ? (
+            <CommentSkeletonList />
+          ) : state.isError ? (
+            <StatePanel
+              title="评论加载失败"
+              description={state.errorMessage}
+              onRetry={state.onRetry}
+            />
+          ) : state.comments.length === 0 ? (
+            <StatePanel title="暂无评论" description="当前作品还没有返回评论内容。" />
+          ) : (
+            <div className="space-y-5">
+              {state.comments.map(comment => (
+                <CommentItem key={comment.id} comment={comment} />
+              ))}
+              <CommentsEndState state={state} />
+            </div>
+          )}
+        </div>
+      </DrawerContent>
+    </Drawer>
+  )
+}
+
+function CommentsEndState({ state }: { state: CommentsState }) {
+  if (state.isFetchingNextPage) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
+        <LoaderCircleIcon className="size-3.5 animate-spin" />
+        正在加载评论
+      </div>
+    )
+  }
+
+  if (state.hasNextPage) {
+    return <p className="py-4 text-center text-xs text-muted-foreground">继续向下滚动加载更多</p>
+  }
+
+  return <p className="py-4 text-center text-xs text-muted-foreground">暂无更多评论</p>
 }
 
 function CommentItem({ comment }: { comment: ComicComment }) {
@@ -289,25 +495,19 @@ function CommentItem({ comment }: { comment: ComicComment }) {
   const content = htmlToText(comment.content)
 
   return (
-    <Card size="sm">
-      <CardContent className="space-y-3 p-4">
-        <div className="flex items-start gap-3">
-          <CommentAvatar name={name} avatar={comment.avatar} />
+    <Card size="sm" className="bg-transparent py-0 ring-0">
+      <CardContent className="space-y-3 px-0 py-1">
+        <div className="space-y-1">
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="truncate text-sm font-medium">{name}</span>
-              {comment.spoiler ? <Badge variant="destructive">剧透</Badge> : null}
             </div>
             <div className="text-xs text-muted-foreground">{formatCommentTime(comment.time)}</div>
           </div>
         </div>
 
-        <div className="space-y-3 pl-11">
-          <p className="text-sm leading-6 text-card-foreground">{content || '这条评论没有内容'}</p>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <ThumbsUpIcon className="size-3.5" />
-            {formatNumber(comment.likeCount)}
-          </div>
+        <div className="space-y-3">
+          <p className="text-xs text-card-foreground">{content || '这条评论没有内容'}</p>
 
           {comment.replies.length > 0 ? (
             <div className="space-y-2 rounded-md bg-muted/60 p-3">
@@ -327,37 +527,28 @@ function ReplyItem({ reply }: { reply: ComicComment }) {
   const content = htmlToText(reply.content)
 
   return (
-    <div className="text-sm leading-6">
+    <div className="text-xs">
       <span className="font-medium">{name}</span>
-      <span className="text-muted-foreground">：{content || '这条回复没有内容'}</span>
+      <span className="text-muted-foreground"> ：{content || '这条回复没有内容'}</span>
     </div>
-  )
-}
-
-function CommentAvatar({ name, avatar }: { name: string; avatar: string }) {
-  return (
-    <Avatar size="lg">
-      {avatar ? <AvatarImage src={avatar} alt={name} referrerPolicy="no-referrer" /> : null}
-      <AvatarFallback>{getInitials(name)}</AvatarFallback>
-    </Avatar>
   )
 }
 
 function RelatedPanel({ items }: { items: RelatedComic[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>相关推荐</CardTitle>
-        <CardDescription>{items.length} 部作品</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <section className="space-y-4">
+      <div className="space-y-1 px-1">
+        <h2 className="text-xl font-semibold tracking-normal">相关推荐</h2>
+        <p className="text-sm text-muted-foreground">{items.length} 部作品</p>
+      </div>
+      <div className="space-y-3">
         {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">暂无相关推荐</p>
+          <p className="px-1 text-sm text-muted-foreground">暂无相关推荐</p>
         ) : (
           items.map(item => <RelatedItem key={item.id} item={item} />)
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }
 
@@ -366,15 +557,9 @@ function RelatedItem({ item }: { item: RelatedComic }) {
     <Link
       to="/comic/$comicId"
       params={{ comicId: item.id }}
-      className="grid grid-cols-[64px_minmax(0,1fr)] gap-3 rounded-md p-1 transition-colors hover:bg-muted"
+      className="grid grid-cols-[64px_minmax(0,1fr)] gap-3 rounded-md p-1"
     >
-      <ComicCover
-        id={item.id}
-        title={item.title}
-        image={item.image}
-        showId={false}
-        className="w-16"
-      />
+      <ComicCover id={item.id} title={item.title} image={item.image} className="w-16" />
       <div className="min-w-0 space-y-1 self-center">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -390,16 +575,13 @@ function RelatedItem({ item }: { item: RelatedComic }) {
 }
 
 function ComicCover({
-  id,
   title,
   image,
-  showId = true,
   className
 }: {
   id: string
   title: string
   image: string
-  showId?: boolean
   className?: string
 }) {
   const [hasImageError, setHasImageError] = useState(false)
@@ -429,11 +611,6 @@ function ComicCover({
         <CoverPlaceholder />
       )}
       {SHOW_COVER_MASK ? <CoverMask /> : null}
-      {showId ? (
-        <div className="absolute top-2 left-2 z-20 rounded-full border border-input/80 bg-background/45 px-2 py-1 text-[10px] backdrop-blur">
-          JM {id}
-        </div>
-      ) : null}
     </div>
   )
 }
@@ -451,6 +628,27 @@ function CoverMask() {
     <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/90 text-muted-foreground backdrop-blur-sm">
       <ImageIcon className="size-6" />
     </div>
+  )
+}
+
+function BackTop() {
+  const isVisible = useBackTopVisibility(560)
+
+  if (!isVisible) {
+    return null
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      aria-label="回到顶部"
+      className="fixed right-8 bottom-8 z-50 bg-background/80 backdrop-blur"
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+    >
+      <ChevronUpIcon className="size-4" />
+    </Button>
   )
 }
 
@@ -489,7 +687,6 @@ function ComicDetailSkeleton() {
       <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-8">
         <div className="space-y-8">
           <ChapterSkeletonList />
-          <CommentSkeletonList />
         </div>
         <div className="h-80 animate-pulse rounded-xl bg-muted" />
       </div>
@@ -517,16 +714,13 @@ function CommentSkeletonList() {
   return (
     <div className="space-y-3">
       {Array.from({ length: 3 }).map((_, index) => (
-        <Card key={index} size="sm">
-          <CardContent className="space-y-3 p-4">
-            <div className="flex items-start gap-3">
-              <div className="size-10 animate-pulse rounded-full bg-muted" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-                <div className="h-3 w-24 animate-pulse rounded bg-muted" />
-              </div>
+        <Card key={index} size="sm" className="bg-transparent py-0 ring-0">
+          <CardContent className="space-y-3 px-0 py-1">
+            <div className="space-y-2">
+              <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-24 animate-pulse rounded bg-muted" />
             </div>
-            <div className="space-y-2 pl-11">
+            <div className="space-y-2">
               <div className="h-4 animate-pulse rounded bg-muted" />
               <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
             </div>
@@ -539,11 +733,26 @@ function CommentSkeletonList() {
 
 type CommentsState = {
   isLoading: boolean
+  isFetchingNextPage: boolean
   isError: boolean
   errorMessage?: string
   total: number
   comments: ComicComment[]
+  hasNextPage: boolean
   onRetry: () => void
+  onLoadMore: () => void
+}
+
+function handleCommentsScroll(element: HTMLDivElement, state: CommentsState) {
+  if (!state.hasNextPage || state.isFetchingNextPage) {
+    return
+  }
+
+  const distanceToBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+
+  if (distanceToBottom <= 80) {
+    state.onLoadMore()
+  }
 }
 
 function sortChapters(chapters: ComicChapter[]) {
@@ -557,6 +766,30 @@ function sortChapters(chapters: ComicChapter[]) {
 
     return rightSort - leftSort
   })
+}
+
+function getVisiblePages(currentPage: number, pageCount: number) {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1)
+  }
+
+  const pages = new Set([1, pageCount, currentPage - 1, currentPage, currentPage + 1])
+  const sortedPages = [...pages]
+    .filter(page => page >= 1 && page <= pageCount)
+    .sort((left, right) => left - right)
+  const visiblePages: Array<number | 'ellipsis'> = []
+
+  for (const page of sortedPages) {
+    const previousPage = visiblePages[visiblePages.length - 1]
+
+    if (typeof previousPage === 'number' && page - previousPage > 1) {
+      visiblePages.push('ellipsis')
+    }
+
+    visiblePages.push(page)
+  }
+
+  return visiblePages
 }
 
 function formatNumber(value: number) {
@@ -580,6 +813,27 @@ function htmlToText(value: string) {
   return document.body.textContent?.trim() ?? value
 }
 
-function getInitials(value: string) {
-  return value.trim().slice(0, 2).toUpperCase() || 'JM'
+function useBackTopVisibility(threshold: number) {
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    let frame = 0
+
+    function updateVisibility() {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        setIsVisible(window.scrollY > threshold)
+      })
+    }
+
+    updateVisibility()
+    window.addEventListener('scroll', updateVisibility, { passive: true })
+
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', updateVisibility)
+    }
+  }, [threshold])
+
+  return isVisible
 }
