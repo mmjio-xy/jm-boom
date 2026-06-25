@@ -1,5 +1,12 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays'
+import { format } from 'date-fns/format'
+import { formatDistanceToNowStrict } from 'date-fns/formatDistanceToNowStrict'
+import { isValid } from 'date-fns/isValid'
+import { parse } from 'date-fns/parse'
+import { enUS } from 'date-fns/locale/en-US'
+import { zhCN } from 'date-fns/locale/zh-CN'
 import {
   ArrowLeftIcon,
   BookOpenIcon,
@@ -54,7 +61,10 @@ export const Route = createFileRoute('/_app/comic/$comicId')({
 })
 
 const DETAIL_STALE_TIME = 10 * 60 * 1000
+const DETAIL_GC_TIME = 60 * 60 * 1000
 const COMMENTS_STALE_TIME = 2 * 60 * 1000
+const COMMENTS_GC_TIME = 10 * 60 * 1000
+const COMMENT_SKELETON_COUNT = 6
 const CHAPTER_PAGE_SIZE = 10
 const SHOW_COVER_MASK = true
 
@@ -65,7 +75,10 @@ function ComicDetailPage() {
   const detail = useQuery({
     queryKey: ['jm-comic-detail', comicId],
     queryFn: () => getComicDetail(comicId),
-    staleTime: DETAIL_STALE_TIME
+    staleTime: DETAIL_STALE_TIME,
+    gcTime: DETAIL_GC_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false
   })
 
   return (
@@ -104,6 +117,9 @@ function ComicDetailView({ comic }: { comic: ComicDetail }) {
     initialPageParam: 1,
     enabled: isCommentsOpen,
     staleTime: COMMENTS_STALE_TIME,
+    gcTime: COMMENTS_GC_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     getNextPageParam: (lastPage, allPages) => {
       const loadedCount = allPages.reduce((sum, page) => sum + page.comments.length, 0)
 
@@ -439,7 +455,7 @@ function CommentsDrawer({
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
-      <DrawerContent className="h-full w-[440px] overflow-hidden p-0 before:inset-0 before:rounded-none before:border-0 data-[vaul-drawer-direction=right]:w-[440px] data-[vaul-drawer-direction=right]:sm:max-w-[440px]">
+      <DrawerContent className="h-full w-[440px] overflow-hidden rounded-l-2xl p-0 before:inset-0 before:rounded-l-2xl before:rounded-r-none data-[vaul-drawer-direction=right]:w-[440px] data-[vaul-drawer-direction=right]:sm:max-w-[440px]">
         <DrawerHeader>
           <DrawerTitle>评论</DrawerTitle>
           <DrawerDescription>共 {formatNumber(state.total)} 条评论</DrawerDescription>
@@ -484,10 +500,10 @@ function CommentsEndState({ state }: { state: CommentsState }) {
   }
 
   if (state.hasNextPage) {
-    return <p className="py-4 text-center text-xs text-muted-foreground">继续向下滚动加载更多</p>
+    return <p className="py-2 text-center text-xs text-muted-foreground">继续向下滚动加载更多</p>
   }
 
-  return <p className="py-4 text-center text-xs text-muted-foreground">暂无更多评论</p>
+  return <p className="py-2 text-center text-xs text-muted-foreground">暂无更多评论</p>
 }
 
 function CommentItem({ comment }: { comment: ComicComment }) {
@@ -495,30 +511,28 @@ function CommentItem({ comment }: { comment: ComicComment }) {
   const content = htmlToText(comment.content)
 
   return (
-    <Card size="sm" className="bg-transparent py-0 ring-0">
-      <CardContent className="space-y-3 px-0 py-1">
-        <div className="space-y-1">
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="truncate text-sm font-medium">{name}</span>
-            </div>
-            <div className="text-xs text-muted-foreground">{formatCommentTime(comment.time)}</div>
+    <div className="space-y-3 px-px py-1">
+      <div className="space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-medium">{name}</span>
           </div>
+          <div className="text-xs text-muted-foreground">{formatCommentTime(comment.time)}</div>
         </div>
+      </div>
 
-        <div className="space-y-3">
-          <p className="text-xs text-card-foreground">{content || '这条评论没有内容'}</p>
+      <div className="space-y-3">
+        <p className="text-xs text-card-foreground">{content || '这条评论没有内容'}</p>
 
-          {comment.replies.length > 0 ? (
-            <div className="space-y-2 rounded-md bg-muted/60 p-3">
-              {comment.replies.map(reply => (
-                <ReplyItem key={reply.id} reply={reply} />
-              ))}
-            </div>
-          ) : null}
-        </div>
-      </CardContent>
-    </Card>
+        {comment.replies.length > 0 ? (
+          <div className="space-y-2 rounded-md bg-muted/60 p-3">
+            {comment.replies.map(reply => (
+              <ReplyItem key={reply.id} reply={reply} />
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
@@ -713,19 +727,17 @@ function ChapterSkeletonList() {
 function CommentSkeletonList() {
   return (
     <div className="space-y-3">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <Card key={index} size="sm" className="bg-transparent py-0 ring-0">
-          <CardContent className="space-y-3 px-0 py-1">
-            <div className="space-y-2">
-              <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-              <div className="h-3 w-24 animate-pulse rounded bg-muted" />
-            </div>
-            <div className="space-y-2">
-              <div className="h-4 animate-pulse rounded bg-muted" />
-              <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-            </div>
-          </CardContent>
-        </Card>
+      {Array.from({ length: COMMENT_SKELETON_COUNT }).map((_, index) => (
+        <div key={index} className="space-y-3 px-px py-1">
+          <div className="space-y-2">
+            <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-4 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+          </div>
+        </div>
       ))}
     </div>
   )
@@ -800,7 +812,97 @@ function formatNumber(value: number) {
 }
 
 function formatCommentTime(value: string) {
-  return value || '未知时间'
+  const parsed = parseCommentDate(value)
+
+  if (parsed == null) {
+    return value || '未知时间'
+  }
+
+  const days = differenceInCalendarDays(new Date(), parsed.date)
+
+  if (!parsed.hasTime) {
+    if (days > 7 || days < 0) {
+      return format(parsed.date, 'yyyy年M月d日', { locale: zhCN })
+    }
+
+    if (days === 0) {
+      return '今天'
+    }
+
+    if (days === 1) {
+      return '昨天'
+    }
+
+    return `${days}天前`
+  }
+
+  if (days > 7) {
+    return format(parsed.date, 'yyyy年M月d日 HH:mm', { locale: zhCN })
+  }
+
+  return formatDistanceToNowStrict(parsed.date, {
+    addSuffix: true,
+    locale: zhCN
+  })
+}
+
+function parseCommentDate(value: string) {
+  const normalizedValue = value.trim()
+
+  if (normalizedValue.length === 0) {
+    return null
+  }
+
+  if (/^\d{10}$/.test(normalizedValue)) {
+    return {
+      date: new Date(Number(normalizedValue) * 1000),
+      hasTime: true
+    }
+  }
+
+  if (/^\d{13}$/.test(normalizedValue)) {
+    return {
+      date: new Date(Number(normalizedValue)),
+      hasTime: true
+    }
+  }
+
+  const directDate = new Date(normalizedValue)
+
+  if (isValid(directDate)) {
+    return {
+      date: directDate,
+      hasTime: hasTimeComponent(normalizedValue)
+    }
+  }
+
+  const formats = [
+    { format: 'yyyy-MM-dd HH:mm:ss', locale: zhCN, hasTime: true },
+    { format: 'yyyy-MM-dd HH:mm', locale: zhCN, hasTime: true },
+    { format: 'yyyy/MM/dd HH:mm:ss', locale: zhCN, hasTime: true },
+    { format: 'yyyy/MM/dd HH:mm', locale: zhCN, hasTime: true },
+    { format: 'MMM dd, yyyy', locale: enUS, hasTime: false },
+    { format: 'MMM d, yyyy', locale: enUS, hasTime: false }
+  ]
+
+  for (const item of formats) {
+    const parsedDate = parse(normalizedValue, item.format, new Date(), {
+      locale: item.locale
+    })
+
+    if (isValid(parsedDate)) {
+      return {
+        date: parsedDate,
+        hasTime: item.hasTime
+      }
+    }
+  }
+
+  return null
+}
+
+function hasTimeComponent(value: string) {
+  return /(?:\d{1,2}:\d{2}|T\d{2})/.test(value)
 }
 
 function htmlToText(value: string) {

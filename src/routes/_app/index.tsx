@@ -13,13 +13,17 @@ export const Route = createFileRoute('/_app/')({
 })
 
 const HOME_FEED_STALE_TIME = 5 * 60 * 1000
+const HOME_FEED_GC_TIME = 60 * 60 * 1000
 const EMPTY_HOME_SECTIONS: HomeFeedSection[] = []
 
 function HomePage() {
   const homeFeed = useQuery({
     queryKey: ['jm-home-feed'],
     queryFn: () => getHomeFeed(),
-    staleTime: HOME_FEED_STALE_TIME
+    staleTime: HOME_FEED_STALE_TIME,
+    gcTime: HOME_FEED_GC_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false
   })
   const sections = homeFeed.data?.sections ?? EMPTY_HOME_SECTIONS
 

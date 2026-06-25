@@ -32,7 +32,9 @@ function WeeklyPage() {
     queryKey: ['week-filters'],
     queryFn: () => getWeekFilters(),
     staleTime: WEEK_FILTERS_STALE_TIME,
-    gcTime: WEEK_FILTERS_GC_TIME
+    gcTime: WEEK_FILTERS_GC_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false
   })
   const categories = useMemo(() => filters.data?.categories ?? [], [filters.data])
   const types = useMemo(() => filters.data?.types ?? [], [filters.data])
@@ -68,7 +70,9 @@ function WeeklyPage() {
       }),
     enabled: canLoadItems,
     staleTime: WEEK_ITEMS_STALE_TIME,
-    gcTime: WEEK_ITEMS_GC_TIME
+    gcTime: WEEK_ITEMS_GC_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false
   })
 
   function refresh() {
