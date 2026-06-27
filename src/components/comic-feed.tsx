@@ -1,12 +1,12 @@
-import { ImageIcon, RefreshCwIcon } from 'lucide-react'
+import { RefreshCwIcon } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { ComicCover } from '@/components/comic-cover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { FeedComic } from '@/lib/api/home'
-import { useSettingsStore } from '@/stores/settings-store'
 
 export function FeedHeader({
   title,
@@ -43,18 +43,16 @@ export function FeedHeader({
 }
 
 export function ComicGrid({ items }: { items: FeedComic[] }) {
-  const hideCovers = useSettingsStore(state => state.hideCovers)
-
   return (
     <div className="grid grid-cols-4 gap-6">
       {items.map(item => (
-        <ComicCard key={item.id} item={item} hideCover={hideCovers} />
+        <ComicCard key={item.id} item={item} />
       ))}
     </div>
   )
 }
 
-function ComicCard({ item, hideCover }: { item: FeedComic; hideCover: boolean }) {
+function ComicCard({ item }: { item: FeedComic }) {
   return (
     <Link
       to="/comic/$comicId"
@@ -65,7 +63,14 @@ function ComicCard({ item, hideCover }: { item: FeedComic; hideCover: boolean })
         size="sm"
         className="gap-0 overflow-hidden py-0 transition-shadow hover:cursor-pointer hover:shadow-xl"
       >
-        <ComicCover id={item.id} title={item.title} image={item.image} hideCover={hideCover} />
+        <ComicCover
+          id={item.id}
+          title={item.title}
+          image={item.image}
+          className="w-full rounded-none"
+          ratio="square"
+          showIdBadge
+        />
         <CardContent className="space-y-1.5 p-3">
           <OverflowTooltipTitle title={item.title} />
           <p className="line-clamp-1 text-xs text-muted-foreground">{item.author || 'N/A'}</p>
@@ -121,63 +126,6 @@ function OverflowTooltipTitle({ title }: { title: string }) {
       <TooltipTrigger asChild>{titleElement}</TooltipTrigger>
       <TooltipContent side="top">{title}</TooltipContent>
     </Tooltip>
-  )
-}
-
-function ComicCover({
-  id,
-  title,
-  image,
-  hideCover
-}: {
-  id: string
-  title: string
-  image: string
-  hideCover: boolean
-}) {
-  const [hasImageError, setHasImageError] = useState(false)
-  const shouldShowImage = image.length > 0 && !hasImageError
-
-  useEffect(() => {
-    setHasImageError(false)
-  }, [image])
-
-  return (
-    <div className="relative aspect-square overflow-hidden bg-muted">
-      {shouldShowImage ? (
-        <img
-          src={image}
-          alt={title}
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          className="h-full w-full object-cover"
-          onError={() => setHasImageError(true)}
-        />
-      ) : (
-        <CoverPlaceholder />
-      )}
-      {hideCover ? <CoverMask /> : null}
-      <div className="absolute top-2 left-2 z-20 rounded-full border border-input/80 bg-background/45 px-2 py-1 text-[10px] backdrop-blur">
-        JM {id}
-      </div>
-    </div>
-  )
-}
-
-function CoverPlaceholder() {
-  return (
-    <div className="flex h-full items-center justify-center bg-muted text-muted-foreground">
-      <ImageIcon className="size-6" />
-    </div>
-  )
-}
-
-function CoverMask() {
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/90 text-muted-foreground backdrop-blur-sm">
-      <ImageIcon className="size-6" />
-    </div>
   )
 }
 

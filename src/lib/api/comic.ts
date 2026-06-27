@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import type { FeedComic } from './home'
 
 export type RelatedComic = {
   id: string
@@ -37,6 +38,25 @@ export type ComicDetail = {
 export type ComicDetailResult = {
   endpoint: string
   comic: ComicDetail
+}
+
+export type FavoriteToggleResult = {
+  endpoint: string
+  favorited: boolean
+}
+
+export type FavoriteFolder = {
+  id: string
+  name: string
+}
+
+export type FavoriteListResult = {
+  endpoint: string
+  page: number
+  total: number
+  hasMore: boolean
+  folders: FavoriteFolder[]
+  items: FeedComic[]
 }
 
 export type ComicComment = {
@@ -88,6 +108,45 @@ export async function getComicComments({
   return invoke<ComicCommentsResult>('get_comic_comments', {
     comicId,
     page,
+    endpoint
+  })
+}
+
+export async function toggleComicFavorite({
+  comicId,
+  currentFavorite,
+  endpoint = null
+}: {
+  comicId: string
+  currentFavorite: boolean
+  endpoint?: string | null
+}): Promise<FavoriteToggleResult> {
+  ensureTauriRuntime()
+
+  return invoke<FavoriteToggleResult>('toggle_comic_favorite', {
+    comicId,
+    currentFavorite,
+    endpoint
+  })
+}
+
+export async function getFavoriteComics({
+  page = 1,
+  folderId = '',
+  order = 'mr',
+  endpoint = null
+}: {
+  page?: number
+  folderId?: string
+  order?: string
+  endpoint?: string | null
+} = {}): Promise<FavoriteListResult> {
+  ensureTauriRuntime()
+
+  return invoke<FavoriteListResult>('get_favorite_comics', {
+    page,
+    folderId,
+    order,
     endpoint
   })
 }

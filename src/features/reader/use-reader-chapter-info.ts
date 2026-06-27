@@ -7,7 +7,7 @@ import { resolveCurrentChapterTitle, resolveNextChapter, toNextChapter } from '.
 import type { ReaderSearch } from './types'
 
 export function useReaderChapterInfo({ comicId, search }: { comicId: string; search: ReaderSearch }) {
-  const albumId = safeTrim(search.albumId)
+  const albumId = safeAlbumId(search.albumId)
   const title = safeTrim(search.title)
   const searchChapter = safeTrim(search.chapter)
   const fallbackNextChapter = useMemo(
@@ -50,4 +50,10 @@ export function useReaderChapterInfo({ comicId, search }: { comicId: string; sea
 
 function safeTrim(value: string | null | undefined) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function safeAlbumId(value: string | null | undefined) {
+  const albumId = safeTrim(value)
+
+  return albumId === '0' ? '' : albumId
 }

@@ -1,5 +1,12 @@
 import { createFileRoute, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
-import { CalendarDaysIcon, HistoryIcon, HouseIcon, SettingsIcon, UserRoundIcon } from 'lucide-react'
+import {
+  BookmarkIcon,
+  CalendarDaysIcon,
+  HistoryIcon,
+  HouseIcon,
+  SettingsIcon,
+  UserRoundIcon
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { FloatingNav, type FloatingNavItem } from '@/components/floating-nav'
@@ -15,6 +22,7 @@ export const Route = createFileRoute('/_app')({
 const NAV_ITEMS: FloatingNavItem[] = [
   { id: 'home', icon: HouseIcon, label: '首页', to: '/' },
   { id: 'weekly', icon: CalendarDaysIcon, label: '每周推荐', to: '/weekly' },
+  { id: 'favorites', icon: BookmarkIcon, label: '收藏', to: '/favorites' },
   { id: 'history', icon: HistoryIcon, label: '历史观看', to: '/history' },
   { id: 'settings', icon: SettingsIcon, label: '设置', to: '/settings' },
   { id: 'me', icon: UserRoundIcon, label: '我的', to: '/me' }

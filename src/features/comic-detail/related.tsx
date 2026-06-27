@@ -44,4 +44,3 @@ function RelatedItem({ item }: { item: RelatedComic }) {
     </Link>
   )
 }
-

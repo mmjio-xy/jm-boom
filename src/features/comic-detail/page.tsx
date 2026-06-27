@@ -1,5 +1,6 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { ArrowLeftIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import {
   getComicComments,
   getComicDetail,
+  toggleComicFavorite,
   type ComicDetail
 } from '@/lib/api/comic'
 import { ChaptersSection } from './chapters'
@@ -20,6 +22,7 @@ import {
 import { ComicHero } from './hero'
 import { RelatedPanel } from './related'
 import { BackTop, ComicDetailSkeleton, StatePanel } from './shared'
+import { resolveAlbumId } from './utils'
 import { useSettingsStore } from '@/stores/settings-store'
 
 export function ComicDetailPage({ comicId }: { comicId: string }) {
@@ -63,8 +66,36 @@ export function ComicDetailPage({ comicId }: { comicId: string }) {
 
 function ComicDetailView({ comic }: { comic: ComicDetail }) {
   const endpoint = useSettingsStore(state => state.api)
+  const queryClient = useQueryClient()
   const [isCommentsOpen, setIsCommentsOpen] = useState(false)
-  const albumId = comic.seriesId || comic.id
+  const favoriteMutation = useMutation({
+    mutationFn: async () =>
+      toggleComicFavorite({
+        comicId: comic.id,
+        currentFavorite: comic.isFavorite,
+        endpoint
+      }),
+    onSuccess: result => {
+      queryClient.setQueryData(['jm-comic-detail', endpoint, comic.id], (current: any) => {
+        if (current == null) {
+          return current
+        }
+
+        return {
+          ...current,
+          comic: {
+            ...current.comic,
+            isFavorite: result.favorited
+          }
+        }
+      })
+      toast.success(result.favorited ? '已添加收藏' : '已取消收藏')
+    },
+    onError: error => {
+      toast.error(error instanceof Error ? error.message : '收藏操作失败')
+    }
+  })
+  const albumId = resolveAlbumId(comic)
   const commentsQuery = useInfiniteQuery({
     queryKey: ['jm-comic-comments', endpoint, comic.id],
     queryFn: ({ pageParam }) => getComicComments({ comicId: comic.id, page: pageParam, endpoint }),
@@ -92,7 +123,12 @@ function ComicDetailView({ comic }: { comic: ComicDetail }) {
 
   return (
     <div className="space-y-10">
-      <ComicHero comic={comic} onCommentsClick={() => setIsCommentsOpen(true)} />
+      <ComicHero
+        comic={comic}
+        onCommentsClick={() => setIsCommentsOpen(true)}
+        onFavoriteClick={() => favoriteMutation.mutate()}
+        favoriteBusy={favoriteMutation.isPending}
+      />
 
       <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-8">
         <div className="min-w-0">

@@ -162,6 +162,58 @@ struct WeekComicsPayload {
 }
 
 #[derive(Debug, Deserialize)]
+struct FavoriteListPayload {
+    #[serde(default, deserialize_with = "deserialize_u32_from_any")]
+    total: u32,
+    #[serde(default)]
+    list: Vec<FavoriteComicPayload>,
+    #[serde(default)]
+    folder_list: Vec<FavoriteFolderPayload>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FavoriteComicPayload {
+    #[serde(
+        default,
+        alias = "AID",
+        alias = "aid",
+        deserialize_with = "deserialize_string_from_any"
+    )]
+    id: String,
+    #[serde(default, deserialize_with = "deserialize_string_from_any")]
+    name: String,
+    #[serde(default, deserialize_with = "deserialize_string_from_any")]
+    author: String,
+    #[serde(default, deserialize_with = "deserialize_optional_string_from_any")]
+    description: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_string_from_any")]
+    image: String,
+    #[serde(default)]
+    category: Option<SearchCategory>,
+    #[serde(default)]
+    category_sub: Option<SearchCategory>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_i64_from_string_or_number"
+    )]
+    update_at: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FavoriteFolderPayload {
+    #[serde(
+        default,
+        rename = "FID",
+        alias = "id",
+        alias = "folder_id",
+        deserialize_with = "deserialize_string_from_any"
+    )]
+    id: String,
+    #[serde(default, deserialize_with = "deserialize_string_from_any")]
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct ComicDetailPayload {
     #[serde(deserialize_with = "deserialize_string_from_string_or_number")]
     id: String,
@@ -536,6 +588,29 @@ pub struct ComicDetailResult {
 }
 
 #[derive(Debug, Serialize)]
+pub struct FavoriteToggleResult {
+    pub endpoint: String,
+    pub favorited: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FavoriteListResult {
+    pub endpoint: String,
+    pub page: u32,
+    pub total: u32,
+    #[serde(rename = "hasMore")]
+    pub has_more: bool,
+    pub folders: Vec<FavoriteFolder>,
+    pub items: Vec<FeedComic>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FavoriteFolder {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ComicDetail {
     pub id: String,
     pub title: String,
@@ -851,6 +926,106 @@ pub async fn get_comic_detail(
     Ok(ComicDetailResult {
         endpoint,
         comic: map_comic_detail(payload_result?, img_host.as_deref()),
+    })
+}
+
+pub async fn toggle_comic_favorite(
+    comic_id: String,
+    current_favorite: bool,
+    endpoint: Option<String>,
+) -> ApiResult<FavoriteToggleResult> {
+    let comic_id = comic_id.trim().to_string();
+
+    if comic_id.is_empty() {
+        return Err(ApiError::new(
+            ApiErrorKind::MissingData,
+            "Favorite toggle needs a comic_id",
+        ));
+    }
+
+    let endpoint = resolve_api_endpoint(endpoint)?;
+    let client = build_http_client()?;
+    let auth = ApiAuth::current();
+    let request_name = format!("{endpoint}/favorite");
+    let response = client
+        .post(&request_name)
+        .header("accept", "application/json")
+        .header("token", &auth.token)
+        .header("tokenparam", &auth.tokenparam)
+        .form(&[("aid", comic_id.as_str())])
+        .send()
+        .await
+        .map_err(|error| {
+            ApiError::new(ApiErrorKind::Network, format!("{request_name}: {error}"))
+        })?;
+
+    let _: serde_json::Value = decode_api_response(response, &request_name, &auth).await?;
+
+    Ok(FavoriteToggleResult {
+        endpoint,
+        favorited: !current_favorite,
+    })
+}
+
+pub async fn get_favorite_comics(
+    page: Option<u32>,
+    folder_id: Option<String>,
+    order: Option<String>,
+    endpoint: Option<String>,
+) -> ApiResult<FavoriteListResult> {
+    let page = page.unwrap_or(1).max(1);
+    let folder_id = folder_id.unwrap_or_default();
+    let folder_id = folder_id.trim().to_string();
+    let order = order.unwrap_or_else(|| "mr".to_string()).trim().to_string();
+    let order = if order.is_empty() {
+        "mr".to_string()
+    } else {
+        order
+    };
+    let endpoint = resolve_api_endpoint(endpoint)?;
+    let client = build_http_client()?;
+    let auth = ApiAuth::current();
+    let img_host_future = request_remote_img_host(&client, &endpoint, &auth);
+    let payload_future =
+        request_favorite_comics(&client, &endpoint, page, &folder_id, &order, &auth);
+    let (img_host_result, payload_result) = tokio::join!(img_host_future, payload_future);
+    let img_host = match img_host_result {
+        Ok(img_host) => Some(img_host),
+        Err(error) => {
+            eprintln!("Failed to load remote setting for favorite covers: {error}");
+            None
+        }
+    };
+    let payload = payload_result?;
+    let total = payload.total;
+    let folders = payload
+        .folder_list
+        .into_iter()
+        .filter(|folder| !folder.id.trim().is_empty())
+        .map(|folder| FavoriteFolder {
+            id: folder.id,
+            name: folder.name,
+        })
+        .collect();
+    let items = payload
+        .list
+        .into_iter()
+        .filter(|item| !item.id.trim().is_empty())
+        .map(|item| map_favorite_comic(item, img_host.as_deref()))
+        .collect::<Vec<_>>();
+    let has_more = if total > 0 {
+        page.saturating_mul(20) < total
+    } else {
+        items.len() >= 20
+    };
+
+    Ok(FavoriteListResult {
+        endpoint,
+        page,
+        total,
+        has_more,
+        folders,
+        items,
     })
 }
 
@@ -1463,6 +1638,28 @@ async fn request_comic_comments(
     .await
 }
 
+async fn request_favorite_comics(
+    client: &reqwest::Client,
+    endpoint: &str,
+    page: u32,
+    folder_id: &str,
+    order: &str,
+    auth: &ApiAuth,
+) -> ApiResult<FavoriteListPayload> {
+    request_api_data(
+        client,
+        endpoint,
+        "favorite",
+        &[
+            ("page", page.to_string()),
+            ("folder_id", folder_id.to_string()),
+            ("o", order.to_string()),
+        ],
+        auth,
+    )
+    .await
+}
+
 async fn request_login(
     client: &reqwest::Client,
     endpoint: &str,
@@ -1747,6 +1944,32 @@ where
 }
 
 fn map_feed_comic(item: ComicListItemPayload, img_host: Option<&str>) -> FeedComic {
+    let mut tags = Vec::new();
+
+    if let Some(title) = item.category.and_then(|category| category.title) {
+        if !title.is_empty() {
+            tags.push(title);
+        }
+    }
+
+    if let Some(title) = item.category_sub.and_then(|category| category.title) {
+        if !title.is_empty() && !tags.contains(&title) {
+            tags.push(title);
+        }
+    }
+
+    FeedComic {
+        image: cover_image_url(img_host, &item.id).unwrap_or(item.image),
+        id: item.id,
+        title: item.name,
+        author: item.author,
+        description: item.description.unwrap_or_default(),
+        tags,
+        updated_at: item.update_at,
+    }
+}
+
+fn map_favorite_comic(item: FavoriteComicPayload, img_host: Option<&str>) -> FeedComic {
     let mut tags = Vec::new();
 
     if let Some(title) = item.category.and_then(|category| category.title) {

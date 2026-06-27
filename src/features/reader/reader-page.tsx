@@ -72,7 +72,7 @@ export function ReaderPage({ comicId, search }: { comicId: string; search: Reade
   ])
   const goBack = useCallback(() => {
     if (search.fromDetail === '1' && albumId.length > 0) {
-      void navigate({ to: '/comic/$comicId', params: { comicId: albumId } })
+      void navigate({ to: '/comic/$comicId', params: { comicId: albumId }, replace: true })
       return
     }
 

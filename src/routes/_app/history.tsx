@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Clock3Icon, ImageIcon, Trash2Icon } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Clock3Icon, Trash2Icon } from 'lucide-react'
+import { useMemo } from 'react'
 import { toast } from 'sonner'
 
 import {
@@ -15,8 +15,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { ComicCover } from '@/components/comic-cover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useSettingsStore } from '@/stores/settings-store'
 import { useReadingHistoryStore, type ReadingHistoryItem } from '@/stores/reading-history-store'
 
 export const Route = createFileRoute('/_app/history')({
@@ -26,7 +26,6 @@ export const Route = createFileRoute('/_app/history')({
 function HistoryPage() {
   const items = useReadingHistoryStore(state => state.items)
   const clear = useReadingHistoryStore(state => state.clear)
-  const hideCovers = useSettingsStore(state => state.hideCovers)
   const sortedItems = useMemo(
     () => [...items].sort((left, right) => right.updatedAt - left.updatedAt),
     [items]
@@ -54,7 +53,7 @@ function HistoryPage() {
         ) : (
           <div className="grid grid-cols-4 gap-6">
             {sortedItems.map(item => (
-              <HistoryCard key={item.comicId} item={item} hideCover={hideCovers} />
+              <HistoryCard key={item.comicId} item={item} />
             ))}
           </div>
         )}
@@ -95,16 +94,10 @@ function ClearHistoryDialog({ disabled, onConfirm }: { disabled: boolean; onConf
   )
 }
 
-function HistoryCard({ item, hideCover }: { item: ReadingHistoryItem; hideCover: boolean }) {
-  const [hasImageError, setHasImageError] = useState(false)
+function HistoryCard({ item }: { item: ReadingHistoryItem }) {
   const coverSrc = item.coverUrl?.trim() ?? ''
-  const shouldShowImage = coverSrc.length > 0 && !hasImageError
   const progress = item.pageCount > 0 ? ((item.pageIndex + 1) / item.pageCount) * 100 : 0
   const title = item.title || `JM ${item.comicId}`
-
-  useEffect(() => {
-    setHasImageError(false)
-  }, [coverSrc])
 
   return (
     <Link
@@ -125,25 +118,15 @@ function HistoryCard({ item, hideCover }: { item: ReadingHistoryItem; hideCover:
         size="sm"
         className="gap-0 overflow-hidden py-0 transition-shadow hover:cursor-pointer hover:shadow-xl"
       >
-        <div className="relative aspect-square overflow-hidden bg-muted">
-          {shouldShowImage ? (
-            <img
-              src={coverSrc}
-              alt={title}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              className="h-full w-full object-cover"
-              onError={() => setHasImageError(true)}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center bg-muted text-muted-foreground">
-              <ImageIcon className="size-6" />
-            </div>
-          )}
-          {hideCover ? <CoverMask /> : null}
-          <div className="absolute top-2 left-2 z-20 rounded-full border border-input/80 bg-background/45 px-2 py-1 text-[10px] backdrop-blur">
-            JM {item.comicId}
-          </div>
+        <div className="relative">
+          <ComicCover
+            id={item.comicId}
+            title={title}
+            image={coverSrc}
+            className="w-full rounded-none"
+            ratio="square"
+            showIdBadge
+          />
           <div className="absolute right-2 bottom-2 left-2 z-20">
             <div className="h-1 overflow-hidden rounded-full bg-black/40">
               <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
@@ -167,14 +150,6 @@ function HistoryCard({ item, hideCover }: { item: ReadingHistoryItem; hideCover:
         </CardContent>
       </Card>
     </Link>
-  )
-}
-
-function CoverMask() {
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/90 text-muted-foreground backdrop-blur-sm">
-      <ImageIcon className="size-6" />
-    </div>
   )
 }
 

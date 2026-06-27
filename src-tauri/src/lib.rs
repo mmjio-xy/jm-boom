@@ -2,9 +2,9 @@ mod api;
 mod reader;
 
 use api::{
-    ApiEndpointProbe, ComicCommentsResult, ComicDetailResult, HomeFeedResult, LoginResult,
-    RemoteSettingResult, SearchAlbumsResult, SignInDataResult, SignInResult, WeekFiltersResult,
-    WeekItemsResult,
+    ApiEndpointProbe, ComicCommentsResult, ComicDetailResult, FavoriteListResult,
+    FavoriteToggleResult, HomeFeedResult, LoginResult, RemoteSettingResult, SearchAlbumsResult,
+    SignInDataResult, SignInResult, WeekFiltersResult, WeekItemsResult,
 };
 use reader::{
     ComicReadManifestResult, ComicReadPageResult, ComicReadPrefetchResult, ReaderCacheStatsResult,
@@ -67,6 +67,29 @@ async fn get_comic_detail(
     endpoint: Option<String>,
 ) -> Result<ComicDetailResult, String> {
     api::get_comic_detail(comic_id, endpoint)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn toggle_comic_favorite(
+    comic_id: String,
+    current_favorite: bool,
+    endpoint: Option<String>,
+) -> Result<FavoriteToggleResult, String> {
+    api::toggle_comic_favorite(comic_id, current_favorite, endpoint)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn get_favorite_comics(
+    page: Option<u32>,
+    folder_id: Option<String>,
+    order: Option<String>,
+    endpoint: Option<String>,
+) -> Result<FavoriteListResult, String> {
+    api::get_favorite_comics(page, folder_id, order, endpoint)
         .await
         .map_err(|error| error.to_string())
 }
@@ -209,6 +232,8 @@ pub fn run() {
             get_week_filters,
             get_week_items,
             get_comic_detail,
+            toggle_comic_favorite,
+            get_favorite_comics,
             get_comic_comments,
             login,
             get_sign_in_data,

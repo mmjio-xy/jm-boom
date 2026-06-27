@@ -1,51 +1,11 @@
-import { ImageIcon, ChevronUpIcon } from 'lucide-react'
+import { ChevronUpIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { StatePanel } from '@/components/comic-feed'
 import { Button } from '@/components/ui/button'
-import { SHOW_COVER_MASK, COMMENT_SKELETON_COUNT } from './constants'
-import { cn } from '@/lib/utils'
+import { COMMENT_SKELETON_COUNT } from './constants'
 
-export function ComicCover({
-  title,
-  image,
-  className
-}: {
-  id: string
-  title: string
-  image: string
-  className?: string
-}) {
-  const [hasImageError, setHasImageError] = useState(false)
-  const shouldShowImage = image.length > 0 && !hasImageError
-
-  useEffect(() => {
-    setHasImageError(false)
-  }, [image])
-
-  return (
-    <div
-      className={cn(
-        'relative aspect-[3/4] overflow-hidden rounded-md bg-muted ring-1 ring-border',
-        className
-      )}
-    >
-      {shouldShowImage ? (
-        <img
-          src={image}
-          alt={title}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className="h-full w-full object-cover"
-          onError={() => setHasImageError(true)}
-        />
-      ) : (
-        <CoverPlaceholder />
-      )}
-      {SHOW_COVER_MASK ? <CoverMask /> : null}
-    </div>
-  )
-}
+export { ComicCover } from '@/components/comic-cover'
 
 export function BackTop() {
   const isVisible = useBackTopVisibility(560)
@@ -131,22 +91,6 @@ export function CommentSkeletonList() {
 
 export { StatePanel }
 
-function CoverPlaceholder() {
-  return (
-    <div className="flex h-full items-center justify-center bg-muted text-muted-foreground">
-      <ImageIcon className="size-6" />
-    </div>
-  )
-}
-
-function CoverMask() {
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/90 text-muted-foreground backdrop-blur-sm">
-      <ImageIcon className="size-6" />
-    </div>
-  )
-}
-
 function ChapterSkeletonList() {
   return (
     <section className="space-y-4">
@@ -187,4 +131,3 @@ function useBackTopVisibility(threshold: number) {
 
   return isVisible
 }
-

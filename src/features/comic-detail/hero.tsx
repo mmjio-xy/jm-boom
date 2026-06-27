@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import {
   BookOpenIcon,
   BookmarkIcon,
+  BookmarkCheckIcon,
   DownloadIcon,
   EyeIcon,
   HeartIcon,
@@ -16,17 +17,21 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import type { ComicDetail } from '@/lib/api/comic'
 import { ComicCover } from './shared'
-import { formatNumber, getNextChapter } from './utils'
+import { formatNumber, getNextChapter, resolveAlbumId } from './utils'
 
 export function ComicHero({
   comic,
-  onCommentsClick
+  onCommentsClick,
+  onFavoriteClick,
+  favoriteBusy = false
 }: {
   comic: ComicDetail
   onCommentsClick: () => void
+  onFavoriteClick: () => void
+  favoriteBusy?: boolean
 }) {
   const authors = comic.author.length > 0 ? comic.author.join(' / ') : 'N/A'
-  const albumId = comic.seriesId || comic.id
+  const albumId = resolveAlbumId(comic)
   const nextChapter = getNextChapter(comic.id, comic.series)
   const statusBadges = [
     comic.price > 0 ? `${comic.price} 积分` : '免费',
@@ -85,12 +90,12 @@ export function ComicHero({
             </Link>
           </Button>
           <Button variant="outline" disabled>
-            <BookmarkIcon className="size-4" />
-            收藏
-          </Button>
-          <Button variant="outline" disabled>
             <DownloadIcon className="size-4" />
             下载
+          </Button>
+          <Button variant={comic.isFavorite ? 'secondary' : 'outline'} onClick={onFavoriteClick} disabled={favoriteBusy}>
+            {comic.isFavorite ? <BookmarkCheckIcon className="size-4" /> : <BookmarkIcon className="size-4" />}
+            {comic.isFavorite ? '已收藏' : '收藏'}
           </Button>
         </div>
 

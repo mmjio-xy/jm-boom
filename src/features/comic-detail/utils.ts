@@ -48,6 +48,12 @@ export function getNextChapter(currentId: string, chapters: ComicChapter[]) {
   return sortedChapters[currentIndex - 1] ?? null
 }
 
+export function resolveAlbumId(comic: { id: string; seriesId?: string | null }) {
+  const seriesId = comic.seriesId?.trim() ?? ''
+
+  return seriesId.length > 0 && seriesId !== '0' ? seriesId : comic.id
+}
+
 export function getVisiblePages(currentPage: number, pageCount: number) {
   if (pageCount <= 7) {
     return Array.from({ length: pageCount }, (_, index) => index + 1)
