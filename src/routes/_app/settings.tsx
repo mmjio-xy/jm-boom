@@ -18,7 +18,7 @@ import {
   TvMinimalPlayIcon
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -91,6 +91,7 @@ function SettingsPage() {
     retry: false,
     refetchOnWindowFocus: false
   })
+  const [isRefreshingEndpoints, setIsRefreshingEndpoints] = useState(false)
   const endpointOptions = useEndpointOptions(api, endpointDiscovery.data)
   const apiRef = useRef(api)
   const lastPreferredDiscoveryAtRef = useRef(0)
@@ -138,6 +139,8 @@ function SettingsPage() {
     if (preferredEndpoint && apiRef.current !== preferredEndpoint.endpoint) {
       setApi(preferredEndpoint.endpoint)
     }
+
+    setIsRefreshingEndpoints(false)
   }, [endpointDiscovery.data, endpointDiscovery.dataUpdatedAt, setApi])
 
   function resetSettings() {
@@ -193,6 +196,7 @@ function SettingsPage() {
                           endpoint={api}
                           probe={endpointOptions.find(option => option.endpoint === api)}
                           isDiscovering={endpointDiscovery.isFetching}
+                          isRefreshingEndpoints={isRefreshingEndpoints}
                           compact
                         />
                       </SelectValue>
@@ -210,6 +214,7 @@ function SettingsPage() {
                               endpoint={option.endpoint}
                               probe={option}
                               isDiscovering={endpointDiscovery.isFetching}
+                              isRefreshingEndpoints={isRefreshingEndpoints}
                             />
                           </SelectItem>
                         ))}
@@ -220,11 +225,19 @@ function SettingsPage() {
                     type="button"
                     variant="outline"
                     size="icon"
-                    disabled={endpointDiscovery.isFetching}
-                    onClick={() => void endpointDiscovery.refetch()}
+                    disabled={endpointDiscovery.isFetching || isRefreshingEndpoints}
+                    onClick={() => {
+                      setIsRefreshingEndpoints(true)
+                      void endpointDiscovery.refetch().catch(() => {
+                        setIsRefreshingEndpoints(false)
+                      })
+                    }}
                   >
                     <RefreshCwIcon
-                      className={cn('size-4', endpointDiscovery.isFetching && 'animate-spin')}
+                      className={cn(
+                        'size-4',
+                        (endpointDiscovery.isFetching || isRefreshingEndpoints) && 'animate-spin'
+                      )}
                     />
                   </Button>
                 </div>
@@ -455,17 +468,24 @@ function EndpointDisplay({
   endpoint,
   probe,
   isDiscovering,
+  isRefreshingEndpoints,
   compact = false
 }: {
   endpoint: string
   probe: ApiEndpointProbe | undefined
   isDiscovering: boolean
+  isRefreshingEndpoints?: boolean
   compact?: boolean
 }) {
   return (
     <span className="flex w-full min-w-0 items-center justify-between gap-2">
       <span className="truncate">{formatEndpoint(endpoint)}</span>
-      <EndpointHealthBadge probe={probe} isDiscovering={isDiscovering} compact={compact} />
+      <EndpointHealthBadge
+        probe={probe}
+        isDiscovering={isDiscovering}
+        isRefreshingEndpoints={isRefreshingEndpoints}
+        compact={compact}
+      />
     </span>
   )
 }
@@ -473,13 +493,15 @@ function EndpointDisplay({
 function EndpointHealthBadge({
   probe,
   isDiscovering,
+  isRefreshingEndpoints = false,
   compact = false
 }: {
   probe: ApiEndpointProbe | undefined
   isDiscovering: boolean
+  isRefreshingEndpoints?: boolean
   compact?: boolean
 }) {
-  if (isDiscovering && !probe?.latencyMs) {
+  if (isDiscovering || isRefreshingEndpoints) {
     return (
       <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
         <LoaderCircleIcon className="size-3 animate-spin" />
