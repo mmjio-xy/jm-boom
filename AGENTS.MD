@@ -149,10 +149,10 @@
 
 ### Phase 4：拆分 Rust API 与收窄 serde 兼容
 
-- [ ] 将 `src-tauri/src/api.rs` 拆为 `api/error.rs`、`client.rs`、`auth.rs`、`codec.rs`、`setting.rs`、`search.rs`、`home.rs`、`comic.rs`、`user.rs`、`models.rs` 等模块。
-- [ ] 第一轮只移动代码，不改 Tauri command 名称和前端契约。
-- [ ] 将 `deserialize_*_from_any` 抽到 `serde_ext.rs`，再按字段逐步收窄为明确语义：`string_or_number`、`bool_or_int`、`string_vec_from_array_or_string` 等。
-- [ ] 只有展示型脏字段保留 lossy helper，并在命名中体现 `lossy`，避免吞掉上游 schema 变化。
+- [x] 将 `src-tauri/src/api.rs` 拆为 `api/error.rs`、`client.rs`、`auth.rs`、`codec.rs`、`setting.rs`、`search.rs`、`home.rs`、`comic.rs`、`user.rs`、`models.rs` 等模块。
+- [x] 第一轮只移动代码，不改 Tauri command 名称和前端契约。
+- [x] 将 `deserialize_*_from_any` 抽到 `serde_ext.rs`，再按字段逐步收窄为明确语义：`string_or_number`、`bool_or_int`、`string_vec_from_array_or_string` 等。
+- [x] 只有展示型脏字段保留 lossy helper，并在命名中体现 `lossy`，避免吞掉上游 schema 变化。
 - 建议 commit msg：`refactor(rust): split api module and isolate serde helpers`。
 
 ### Phase 5：拆分阅读器 Rust 与前端 hooks
