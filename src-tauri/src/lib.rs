@@ -3,6 +3,7 @@ mod diagnostics;
 mod download;
 mod plugin_codec;
 mod reader;
+mod storage;
 mod updater;
 
 use api::{
@@ -320,6 +321,10 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             let _ = diagnostics::init(&handle);
+            if let Err(error) = tauri::async_runtime::block_on(storage::init(&handle)) {
+                diagnostics::error(format!("Failed to initialize storage: {error}"));
+                return Err(std::io::Error::other(error).into());
+            }
             diagnostics::info("JM Boom started");
 
             Ok(())

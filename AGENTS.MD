@@ -16,6 +16,7 @@
 - Rust 依赖可直接添加并用 `cargo check` 下载；前端依赖不要直接安装，先告诉用户。
 - 用户此前表示暂时不要纠结 `lint`；不要因为 `lint` 结果扩大无关改动。
 - 每次大的变动后，同步用户相应的 `commit msg`。
+- 项目处于高速迭代期，不需要历史兼容包袱；重构可直接替换旧实现，不保留旧 JSON/旧 schema/旧 fallback 的兼容分支。
 
 ## 验证命令
 
@@ -63,6 +64,7 @@
   - `src-tauri/src/api.rs` + `src-tauri/src/api/*`：远程设置、搜索、首页、列表、排行、收藏、详情、评论、登录、签到、代理等普通接口。
   - `src-tauri/src/reader.rs` + `src-tauri/src/reader/*`：阅读 manifest、图片下载、解扰、缓存、reader cache 管理。
   - `src-tauri/src/download.rs` + `src-tauri/src/download/*`：下载任务状态机、持久化、路径规则和进度估算。
+  - `src-tauri/src/storage/*`：SQLite 连接池、schema 初始化和后续本地持久化表。
   - `src-tauri/src/updater.rs`：应用更新检查和安装。
   - `src-tauri/src/lib.rs`：Tauri command 包装和 invoke handler 注册。
 
@@ -116,72 +118,100 @@
 - 开启性能调试日志时，阅读器日志包含 `origin=visible|prefetch`、`lock_wait_ms`、`download_ms`、`cache_ms`、`load_ms`、`reorder_ms`、`encode_ms`、`write_ms`、`cleanup_ms`、`source_kb`、`output_kb`、`ratio`、`delta_kb`。
 - 当前没有单独的 Rust `prefetch_comic_read_pages` command，也没有设置页“预载数量/阅读线路”选项；如需恢复，先重新设计前后端契约。
 
-## 重构优化 TODO LIST
+## 当前优化路线图
 
-重构原则：每个 Phase 尽量保持行为不变；先移动和收边界，再做语义调整；每轮完成后同步建议 `commit msg`。
+原则：不碰测试基线和安全基线；不开放预取设置；不保留旧实现兼容分支；每轮完成后同步建议 `commit msg`。
 
-### Phase 0：建立重构基线
+### Phase 0：SQLite 存储基建
 
-- [x] 跑一次当前基线验证：前端 `bun run build`，涉及 Rust 时在 `src-tauri` 跑 `cargo check`。
-- [x] 记录当前大文件和高风险边界：`src-tauri/src/api.rs` 约 3121 行、`src-tauri/src/reader.rs` 约 1074 行、`src/routes/_app/settings.tsx` 约 719 行、`src-tauri/src/download.rs` 约 694 行。
-- [x] 不做功能改动，只确认重构起点可构建。
-- 建议 commit msg：`chore: establish refactor baseline`。
+- 引入 Rust SQLite 层，优先使用 `sqlx` + SQLite，数据库只由 Rust 侧访问，前端继续走 Tauri `invoke`。
+- 新建 `src-tauri/src/storage/`，负责连接池、schema 初始化和后续 migration。
+- 数据库放应用数据目录，首批表包括 `download_tasks`、`download_chapters`、`reader_cache_entries`、`runtime_cache_entries`。
+- 本阶段只建库和空表，不接入业务读写。
+- 验证：`src-tauri` 下 `cargo check`。
+- 建议 commit msg：`feat(storage): add sqlite storage foundation`。
 
-### Phase 1：运行日志与 DEBUG 日志治理
+### Phase 1：下载任务迁移到 SQLite
 
-- [x] 去掉或门控发布版中的临时调试输出：`eprintln!`、`console.debug`、过量 reader 性能日志等。
-- [x] 引入应用打包后的运行日志，用于用户反馈问题排查；默认记录 `info/warn/error`，开发调参日志仅在 debug 或显式开关下启用。
-- [x] 日志写入应用日志目录，在设置增加调试，提供“打开日志目录”或“导出诊断日志”入口；日志需有大小限制或轮转策略。
-- [x] 日志内容避免敏感信息：不记录密码、JWT、完整鉴权 header；endpoint 可记录 host/耗时/状态，必要时脱敏。
-- [x] 统一 Rust 侧日志入口，优先考虑 `tracing`/`log` facade 或 Tauri 日志插件；前端错误后续接入同一诊断路径。
-- 建议 commit msg：`feat(logging): add runtime diagnostics and gate debug logs`。
+- 直接替换当前 JSON 下载任务持久化，不做旧 JSON 自动导入。
+- `download_tasks` 存任务主信息；`download_chapters` 存章节列表和顺序。
+- 前端 command 契约保持不变：新增、列表、暂停、恢复、取消、删除、打开目录仍走现有 invoke。
+- 验证：`cargo check`，手动确认新任务能入库和恢复。
+- 建议 commit msg：`refactor(downloads): persist tasks with sqlite`。
 
-### Phase 2：前端基础清理
+### Phase 2：下载进度写入节流
 
-- [x] 抽 `src/lib/api/tauri.ts`，统一 `tauriInvoke<T>()`，移除各 `src/lib/api/*.ts` 中重复的 `ensureTauriRuntime`。
-- [x] 抽 `src/lib/query-keys.ts`，集中管理 TanStack Query key，避免缓存 key 散落。
-- [x] 抽 `src/lib/format.ts`，统一 `formatBytes`、`formatDuration` 等格式化函数。
-- [x] 修掉 `src/features/comic-detail/page.tsx` 中的 `any`，保持 TypeScript strict 友好。
-- 建议 commit msg：`refactor(frontend): centralize api helpers and shared utilities`。
+- 下载状态仍在内存实时更新，SQLite 进度写入按 500ms 或 1000ms 节流。
+- 任务完成、失败、暂停、取消时强制 flush。
+- 前端 1 秒轮询暂时不变。
+- 验证：`cargo check`，手动下载多页章节确认进度更新。
+- 建议 commit msg：`perf(downloads): throttle progress persistence`。
 
-### Phase 3：拆分设置页
+### Phase 3：Reader 缓存索引 SQLite 化
 
-- [x] 将 `src/routes/_app/settings.tsx` 拆到 `src/features/settings/`，路由文件仅保留 `createFileRoute` 和页面入口。
-- [x] 按 section 拆分：版本更新、外观、API endpoint、代理、缓存、隐私模式、调试诊断。
-- [x] 抽 `SettingRow`、`SectionTitle`、endpoint 选择/测速展示等稳定组件或 hooks。
-- [x] 保持 UI 和交互行为不变。
-- 建议 commit msg：`refactor(settings): split settings page into feature modules`。
+- 图片文件仍放 app cache 的 `reader` 目录，路径规则不变。
+- `reader_cache_entries` 记录 endpoint、read_id、page_index、path、size_bytes、width、height、extension、is_scrambled、updated_at。
+- 冷缓存写入成功后 upsert 索引；热缓存命中时更新 `updated_at`。
+- 直接改用索引，不为旧缓存目录做一次性重建兼容。
+- 验证：`cargo check`，冷缓存、热缓存、清缓存正常。
+- 建议 commit msg：`perf(reader): index page cache metadata in sqlite`。
 
-### Phase 4：拆分 Rust API 与收窄 serde 兼容
+### Phase 4：Reader 缓存清理后台化
 
-- [x] 将 `src-tauri/src/api.rs` 拆为 `api/error.rs`、`client.rs`、`auth.rs`、`codec.rs`、`setting.rs`、`search.rs`、`home.rs`、`comic.rs`、`user.rs`、`models.rs` 等模块。
-- [x] 第一轮只移动代码，不改 Tauri command 名称和前端契约。
-- [x] 将 `deserialize_*_from_any` 抽到 `serde_ext.rs`，再按字段逐步收窄为明确语义：`string_or_number`、`bool_or_int`、`string_vec_from_array_or_string` 等。
-- [x] 只有展示型脏字段保留 lossy helper，并在命名中体现 `lossy`，避免吞掉上游 schema 变化。
-- 建议 commit msg：`refactor(rust): split api module and isolate serde helpers`。
+- 写入当前页后尽快返回，不在翻页关键路径递归扫描缓存目录。
+- 超过缓存上限时触发单实例后台清理任务，按 SQLite 索引的 `updated_at` 删除旧文件。
+- 清理失败只记录日志，不阻塞当前页显示。
+- 验证：`cargo check`，调低缓存上限确认旧文件可清理。
+- 建议 commit msg：`perf(reader): prune cache from sqlite index in background`。
 
-### Phase 5：拆分阅读器 Rust 与前端 hooks
+### Phase 5：下载页有限并发
 
-- [x] 将 `src-tauri/src/reader.rs` 拆为 `reader/types.rs`、`manifest.rs`、`page.rs`、`cache.rs`、`image_decode.rs`。
-- [x] 保留 `get_comic_read_page` 的 `index` 语义、缓存路径命名规则和阅读页 search 参数。
-- [x] 拆分 `src/features/reader/use-reader-pages.ts`：导航状态、manifest query、page query、prefetch 策略分离。
-- [x] 保证可见页优先返回，不被后台预取拖慢；重新评估是否提前触发预取。
-- [x] 检查 `ReaderImage` loading 状态，避免图片已可用但界面仍停顿。
-- 建议 commit msg：`refactor(reader): separate manifest page cache and prefetch logic`。
+- 任务队列仍保持单任务执行，单个任务内部页面下载改为有限并发，默认 3 或 4。
+- 保证输出目录和 `0001.ext` 命名不变。
+- 暂停/取消需要尽快生效；任一页失败先让任务失败，后续再评估单页重试。
+- 验证：`cargo check`，手动下载整章确认文件完整。
+- 建议 commit msg：`perf(downloads): download pages with bounded concurrency`。
 
-### Phase 6：拆分下载模块
+### Phase 6：Runtime API 缓存
 
-- [x] 拆分 `src/routes/_app/downloads.tsx`，抽 `DownloadTaskCard`、`DownloadEmptyState`、`DeleteTaskDialog`、`useDownloadTasks`。
-- [x] 将 `src-tauri/src/download.rs` 拆为 `download/types.rs`、`manager.rs`、`storage.rs`、`paths.rs`、`progress.rs`。
-- [x] 保持下载任务状态机、持久化格式、任务目录规则不变。
-- 建议 commit msg：`refactor(downloads): split download ui and manager modules`。
+- 使用 `runtime_cache_entries` 缓存短 TTL 数据：endpoint discovery、img_host、reader manifest。
+- 第一轮 TTL 建议 endpoint/img_host 30 分钟，reader manifest 10-30 分钟。
+- 网络失败时可返回未过期缓存并记录日志。
+- 验证：`cargo check`，弱网/断网场景确认 fallback 行为。
+- 建议 commit msg：`feat(api): cache runtime endpoint and reader metadata`。
 
-### Phase 7：收尾与架构文档同步
+### Phase 7：结构化错误返回
 
-- [x] 清理重复 helper、过时 fallback、无用兼容写法；不因 lint 扩大无关改动。
-- [x] 后续排版方向参考 Breeze：单页 `contain` 当前已接近；滚动模式可学习图片尺寸缓存；双页/RTL/LTR 支持尚未实现。
-- [x] 更新本文件中已经变化的项目结构和实现说明。
-- 建议 commit msg：`chore: document refactored module boundaries`。
+- Rust `ApiError` 增加可序列化错误 DTO：`kind`、`message`、`retryable`。
+- Tauri command 使用统一 helper 返回结构化错误；前端 `tauriInvoke` 解析结构化错误。
+- 登录过期、网络错误、API 失败、缓存失败分别显示准确文案。
+- 验证：`cargo check`、`bun run build`。
+- 建议 commit msg：`refactor(api): return structured command errors`。
+
+### Phase 8：标准化日志与性能 span
+
+- 引入 `tracing`、`tracing-subscriber`、`tracing-appender`，保留设置页调试日志开关。
+- reader 日志统一 read_id、page、origin、cache_hit、download_ms、decode_ms、write_ms、cleanup_ms。
+- download 日志统一 task_id、chapter_id、page、status、elapsed_ms。
+- 旧 `diagnostics::*` 可先作为 wrapper 过渡，但不保留长期双实现。
+- 验证：`cargo check`，设置页打开日志目录确认输出。
+- 建议 commit msg：`refactor(logging): move diagnostics to tracing`。
+
+### Phase 9：前端路由状态与 Query 策略收敛
+
+- `list`、`ranking`、`weekly`、`search` 的分页和筛选统一进入 route search。
+- 抽公共分页组件，减少重复。
+- `QueryClient` 增加默认 retry、stale/gc 配置；reader query 单独覆盖。
+- 不做 Query persistence，等 SQLite runtime cache 稳定后再评估。
+- 验证：`bun run build`。
+- 建议 commit msg：`refactor(frontend): normalize route state and query defaults`。
+
+### Phase 10：文档同步与旧实现清理
+
+- 更新本文档中的 SQLite 存储边界、reader cache index 行为、download 持久化和并发规则。
+- 清理被替换的旧 JSON 下载持久化代码和不再使用的 helper。
+- 验证：`cargo check`、`bun run build`。
+- 建议 commit msg：`chore: document sqlite storage module boundaries`。
 
 ## 注意事项
 
