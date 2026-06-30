@@ -4,6 +4,7 @@ import { BarChart3Icon, ListFilterIcon } from 'lucide-react'
 
 import { ComicGrid, ComicGridSkeleton, FeedHeader, StatePanel } from '@/components/comic-feed'
 import { ListPagination } from '@/components/list-pagination'
+import { PageBackButton } from '@/components/page-back-button'
 import {
   Select,
   SelectContent,
@@ -98,6 +99,7 @@ function RankingPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-6xl space-y-6 p-[96px_32px_32px_96px]">
+        <PageBackButton />
         <FeedHeader
           title="排行榜"
           description="按分类和热度浏览作品"

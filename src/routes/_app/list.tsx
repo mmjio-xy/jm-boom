@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ArrowLeftIcon } from 'lucide-react'
 
 import { ComicGrid, ComicGridSkeleton, FeedHeader, StatePanel } from '@/components/comic-feed'
 import { ListPagination } from '@/components/list-pagination'
+import { PageBackButton } from '@/components/page-back-button'
 import {
   Select,
   SelectContent,
@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
 import { getHomeSectionList, type HomeSectionListMode } from '@/lib/api/home'
 import { LIST_QUERY_GC_TIME, LIST_QUERY_STALE_TIME } from '@/lib/query-cache'
 import { queryKeys } from '@/lib/query-keys'
@@ -159,25 +158,13 @@ function HomeSectionListPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-6xl space-y-6 p-[96px_32px_32px_96px]">
-        <div className="flex items-start gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="返回"
-            onClick={() => window.history.back()}
-          >
-            <ArrowLeftIcon className="size-4" />
-          </Button>
-          <div className="min-w-0 flex-1">
-            <FeedHeader
-              title={title}
-              description={sectionModeDescription(search.mode)}
-              isFetching={query.isFetching}
-              onRefresh={() => query.refetch()}
-            />
-          </div>
-        </div>
+        <PageBackButton />
+        <FeedHeader
+          title={title}
+          description={sectionModeDescription(search.mode)}
+          isFetching={query.isFetching}
+          onRefresh={() => query.refetch()}
+        />
 
         <SectionFilters
           mode={search.mode}

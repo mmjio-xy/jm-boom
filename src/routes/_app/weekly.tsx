@@ -5,6 +5,7 @@ import { useEffect, useMemo } from 'react'
 
 import { ComicGrid, ComicGridSkeleton, FeedHeader, StatePanel } from '@/components/comic-feed'
 import { ListPagination } from '@/components/list-pagination'
+import { PageBackButton } from '@/components/page-back-button'
 import {
   Select,
   SelectContent,
@@ -145,6 +146,7 @@ function WeeklyPage() {
 
   return (
     <div className="flex flex-col gap-4 p-[96px_32px_16px_96px]">
+      <PageBackButton />
       <FeedHeader
         title="每周推荐"
         description="为你精选的本周热门作品"

@@ -1,10 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useRouter } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { ArrowLeftIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
+import { PageBackButton } from '@/components/page-back-button'
 import {
   getComicComments,
   getComicDetail,
@@ -34,7 +32,6 @@ import {
 import { enqueueComicDownload } from '@/lib/api/download'
 
 export function ComicDetailPage({ comicId }: { comicId: string }) {
-  const router = useRouter()
   const endpoint = useSettingsStore(state => state.api)
   const detail = useQuery({
     queryKey: queryKeys.comicDetail(endpoint, comicId),
@@ -48,10 +45,7 @@ export function ComicDetailPage({ comicId }: { comicId: string }) {
   return (
     <main className="min-h-screen bg-background p-[48px_32px_32px_96px] text-foreground">
       <div className="mx-auto max-w-7xl space-y-8">
-        <Button variant="ghost" size="sm" onClick={() => router.history.back()}>
-          <ArrowLeftIcon className="size-4" />
-          返回
-        </Button>
+        <PageBackButton />
 
         {detail.isLoading ? (
           <ComicDetailSkeleton />
