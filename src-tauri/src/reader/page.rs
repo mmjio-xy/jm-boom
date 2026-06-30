@@ -1,6 +1,10 @@
 use super::cache::{
     cleanup_reader_cache, file_size_bytes, map_cache_error, reader_cache_root,
-    reader_page_cache_path, write_temp_reader_cache_file,
+    reader_page_cache_extension, reader_page_cache_path, write_temp_reader_cache_file,
+};
+use super::cache_index::{
+    delete_reader_cache_entry, find_reader_cache_entry, touch_reader_cache_entry,
+    upsert_reader_cache_entry, ReaderCacheEntryInput,
 };
 use super::image_decode::{
     decode_scrambled_image, encode_scrambled_webp_cache, map_image_error, should_decode_image,
@@ -102,9 +106,11 @@ async fn materialize_reader_page_inner(
     let _materialize_guard = materialize_lock.lock().await;
     let lock_wait_elapsed = lock_started_at.elapsed();
 
-    if cache_path.exists() {
-        match fs::metadata(&cache_path) {
+    if let Some(entry) = find_reader_cache_entry(manifest, &page).await? {
+        let indexed_path = PathBuf::from(&entry.path);
+        match fs::metadata(&indexed_path) {
             Ok(metadata) if metadata.is_file() => {
+                touch_reader_cache_entry(manifest, &page).await?;
                 diagnostics::debug(format!(
                     "Reader page cache hit read_id={} page={} origin={} lock_wait_ms={:.1} total_ms={:.1}",
                     manifest.read_id,
@@ -114,21 +120,34 @@ async fn materialize_reader_page_inner(
                     elapsed_ms(materialize_started_at.elapsed()),
                 ));
 
-                return Ok(page_result(manifest, index, cache_path, 0, 0, true));
+                return Ok(page_result(
+                    manifest,
+                    index,
+                    indexed_path,
+                    entry.width,
+                    entry.height,
+                    true,
+                ));
             }
             Ok(_) => {
                 diagnostics::warn(
                     "Failed to read cached reader page, refreshing it: cached path is not a file",
                 );
-                let _ = fs::remove_file(&cache_path);
+                let _ = fs::remove_file(&indexed_path);
+                delete_reader_cache_entry(manifest, &page).await?;
             }
             Err(error) => {
                 diagnostics::warn(format!(
                     "Failed to read cached reader page, refreshing it: {error}"
                 ));
-                let _ = fs::remove_file(&cache_path);
+                let _ = fs::remove_file(&indexed_path);
+                delete_reader_cache_entry(manifest, &page).await?;
             }
         }
+    }
+
+    if cache_path.exists() {
+        let _ = fs::remove_file(&cache_path);
     }
 
     let client = build_http_client()?;
@@ -139,17 +158,13 @@ async fn materialize_reader_page_inner(
     let page_for_decode = page.clone();
     let manifest_for_decode = manifest.clone();
     let cache_path_for_decode = cache_path.clone();
-    let cache_root_for_cleanup = cache_root.clone();
 
-    let (width, height) = tokio::task::spawn_blocking(move || {
+    let write_result = tokio::task::spawn_blocking(move || {
         write_reader_page_cache(
-            &cache_root_for_cleanup,
             &cache_path_for_decode,
             &manifest_for_decode,
             &page_for_decode,
             &bytes,
-            cache_limit_bytes,
-            origin,
         )
     })
     .await
@@ -159,6 +174,32 @@ async fn materialize_reader_page_inner(
             format!("Failed to decode reader page: {error}"),
         )
     })??;
+    let output_bytes =
+        file_size_bytes(&cache_path).unwrap_or(write_result.output_bytes.unwrap_or(0));
+    upsert_reader_cache_entry(ReaderCacheEntryInput {
+        endpoint: manifest.endpoint.clone(),
+        read_id: manifest.read_id.clone(),
+        page_index: page.index,
+        path: cache_path.to_string_lossy().to_string(),
+        size_bytes: output_bytes,
+        width: write_result.width,
+        height: write_result.height,
+        extension: reader_page_cache_extension(manifest, &page).to_string(),
+        is_scrambled: should_decode_image(manifest, &page),
+    })
+    .await?;
+    let cleanup_started_at = Instant::now();
+    cleanup_reader_cache(cache_limit_bytes).await?;
+    let cleanup_elapsed = cleanup_started_at.elapsed();
+    log_reader_cache_timing(
+        manifest,
+        &page,
+        origin,
+        write_result.mode,
+        write_result.source_bytes,
+        Some(output_bytes),
+        &write_result.timings_with_cleanup(cleanup_elapsed),
+    );
     let cache_elapsed = download_started_at
         .elapsed()
         .saturating_sub(download_elapsed);
@@ -175,7 +216,12 @@ async fn materialize_reader_page_inner(
     ));
 
     Ok(page_result(
-        manifest, index, cache_path, width, height, false,
+        manifest,
+        index,
+        cache_path,
+        write_result.width,
+        write_result.height,
+        false,
     ))
 }
 
@@ -240,14 +286,11 @@ async fn download_image_bytes(
 }
 
 fn write_reader_page_cache(
-    cache_root: &Path,
     cache_path: &Path,
     manifest: &ReaderManifest,
     page: &ReaderPage,
     bytes: &[u8],
-    cache_limit_bytes: u64,
-    origin: ReaderPageMaterializeOrigin,
-) -> ApiResult<(u32, u32)> {
+) -> ApiResult<ReaderCacheWriteResult> {
     let total_started_at = Instant::now();
 
     if let Some(parent) = cache_path.parent() {
@@ -261,24 +304,17 @@ fn write_reader_page_cache(
         })?;
         let output_bytes = file_size_bytes(cache_path);
         let write_elapsed = write_started_at.elapsed();
-        let cleanup_started_at = Instant::now();
-        cleanup_reader_cache(cache_root, cache_limit_bytes)?;
-        let cleanup_elapsed = cleanup_started_at.elapsed();
-        log_reader_cache_timing(
-            manifest,
-            page,
-            origin,
+        return Ok(ReaderCacheWriteResult::new(
+            0,
+            0,
+            output_bytes,
             "direct",
             bytes.len(),
-            output_bytes,
-            &[
+            vec![
                 ("write_ms", write_elapsed),
-                ("cleanup_ms", cleanup_elapsed),
                 ("total_ms", total_started_at.elapsed()),
             ],
-        );
-
-        return Ok((0, 0));
+        ));
     }
 
     let load_started_at = Instant::now();
@@ -298,27 +334,20 @@ fn write_reader_page_cache(
     })?;
     let write_elapsed = write_started_at.elapsed();
     let output_bytes = file_size_bytes(cache_path);
-    let cleanup_started_at = Instant::now();
-    cleanup_reader_cache(cache_root, cache_limit_bytes)?;
-    let cleanup_elapsed = cleanup_started_at.elapsed();
-    log_reader_cache_timing(
-        manifest,
-        page,
-        origin,
+    Ok(ReaderCacheWriteResult::new(
+        decoded_width,
+        decoded_height,
+        output_bytes,
         "scrambled_webp_q75",
         bytes.len(),
-        output_bytes,
-        &[
+        vec![
             ("load_ms", load_elapsed),
             ("reorder_ms", decode_elapsed),
             ("encode_ms", encode_elapsed),
             ("write_ms", write_elapsed),
-            ("cleanup_ms", cleanup_elapsed),
             ("total_ms", total_started_at.elapsed()),
         ],
-    );
-
-    Ok((decoded_width, decoded_height))
+    ))
 }
 
 fn write_reader_page_file(
@@ -431,4 +460,40 @@ fn reader_page_materialize_lock(cache_path: &Path) -> Arc<AsyncMutex<()>> {
         .entry(cache_path.to_path_buf())
         .or_insert_with(|| Arc::new(AsyncMutex::new(())))
         .clone()
+}
+
+#[derive(Debug)]
+struct ReaderCacheWriteResult {
+    width: u32,
+    height: u32,
+    output_bytes: Option<u64>,
+    mode: &'static str,
+    source_bytes: usize,
+    timings: Vec<(&'static str, Duration)>,
+}
+
+impl ReaderCacheWriteResult {
+    fn new(
+        width: u32,
+        height: u32,
+        output_bytes: Option<u64>,
+        mode: &'static str,
+        source_bytes: usize,
+        timings: Vec<(&'static str, Duration)>,
+    ) -> Self {
+        Self {
+            width,
+            height,
+            output_bytes,
+            mode,
+            source_bytes,
+            timings,
+        }
+    }
+
+    fn timings_with_cleanup(&self, cleanup_elapsed: Duration) -> Vec<(&'static str, Duration)> {
+        let mut timings = self.timings.clone();
+        timings.push(("cleanup_ms", cleanup_elapsed));
+        timings
+    }
 }

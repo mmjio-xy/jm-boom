@@ -1,3 +1,6 @@
+use super::cache_index::{
+    delete_reader_cache_entry_by_path, list_reader_cache_entries_by_age, reader_cache_index_stats,
+};
 use super::image_decode::{should_decode_image, source_extension};
 use super::types::{
     ReaderCacheStatsResult, ReaderManifest, ReaderPage, DEFAULT_READER_CACHE_LIMIT_BYTES,
@@ -6,6 +9,7 @@ use super::types::{
 use crate::api::{ApiError, ApiErrorKind, ApiResult};
 use crate::diagnostics;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tauri::{AppHandle, Manager};
@@ -59,14 +63,21 @@ pub(crate) fn reader_page_cache_path(
     manifest: &ReaderManifest,
     page: &ReaderPage,
 ) -> ApiResult<PathBuf> {
-    let extension = if should_decode_image(manifest, page) {
-        "webp"
-    } else {
-        source_extension(&page.source_url)
-    };
+    let extension = reader_page_cache_extension(manifest, page);
     let read_dir = cache_root.join(safe_path_segment(&manifest.read_id));
 
     Ok(read_dir.join(format!("{:04}.{extension}", page.index + 1)))
+}
+
+pub(crate) fn reader_page_cache_extension(
+    manifest: &ReaderManifest,
+    page: &ReaderPage,
+) -> &'static str {
+    if should_decode_image(manifest, page) {
+        "webp"
+    } else {
+        source_extension(&page.source_url)
+    }
 }
 
 fn reader_page_temp_cache_path(cache_path: &Path) -> PathBuf {
@@ -87,38 +98,34 @@ fn reader_page_temp_cache_path(cache_path: &Path) -> PathBuf {
     ))
 }
 
-fn is_reader_cache_temp_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("tmp"))
-}
-
-pub(crate) fn cleanup_reader_cache(cache_root: &Path, cache_limit_bytes: u64) -> ApiResult<()> {
-    let files = collect_cache_files(cache_root)?;
-    let total_size = files.iter().map(|file| file.size).sum::<u64>();
+pub(crate) async fn cleanup_reader_cache(cache_limit_bytes: u64) -> ApiResult<()> {
+    let (total_size, _) = reader_cache_index_stats().await?;
 
     if total_size <= cache_limit_bytes {
         return Ok(());
     }
 
     let cache_trim_bytes = cache_trim_bytes(cache_limit_bytes);
-    let mut files = files;
-    files.sort_by_key(|file| file.modified);
     let mut current_size = total_size;
 
-    for file in files {
+    for entry in list_reader_cache_entries_by_age().await? {
         if current_size <= cache_trim_bytes {
             break;
         }
 
-        match fs::remove_file(&file.path) {
+        match fs::remove_file(&entry.path) {
             Ok(()) => {
-                current_size = current_size.saturating_sub(file.size);
+                current_size = current_size.saturating_sub(entry.size_bytes);
+                delete_reader_cache_entry_by_path(&entry.path).await?;
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                current_size = current_size.saturating_sub(entry.size_bytes);
+                delete_reader_cache_entry_by_path(&entry.path).await?;
             }
             Err(error) => {
                 diagnostics::warn(format!(
                     "Failed to remove reader cache file {:?}: {error}",
-                    file.path
+                    entry.path
                 ));
             }
         }
@@ -127,60 +134,16 @@ pub(crate) fn cleanup_reader_cache(cache_root: &Path, cache_limit_bytes: u64) ->
     Ok(())
 }
 
-#[derive(Debug)]
-struct CacheFile {
-    path: PathBuf,
-    size: u64,
-    modified: SystemTime,
-}
-
-fn collect_cache_files(cache_root: &Path) -> ApiResult<Vec<CacheFile>> {
-    let mut files = Vec::new();
-
-    if !cache_root.exists() {
-        return Ok(files);
-    }
-
-    collect_cache_files_in(cache_root, &mut files)?;
-
-    Ok(files)
-}
-
-fn collect_cache_files_in(dir: &Path, files: &mut Vec<CacheFile>) -> ApiResult<()> {
-    for entry in fs::read_dir(dir).map_err(map_cache_error)? {
-        let entry = entry.map_err(map_cache_error)?;
-        let path = entry.path();
-        let metadata = entry.metadata().map_err(map_cache_error)?;
-
-        if metadata.is_dir() {
-            collect_cache_files_in(&path, files)?;
-        } else if metadata.is_file() {
-            if is_reader_cache_temp_path(&path) {
-                continue;
-            }
-
-            files.push(CacheFile {
-                path,
-                size: metadata.len(),
-                modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),
-            });
-        }
-    }
-
-    Ok(())
-}
-
-pub(crate) fn reader_cache_stats(
+pub(crate) async fn reader_cache_stats(
     cache_root: PathBuf,
     cache_limit_bytes: u64,
 ) -> ApiResult<ReaderCacheStatsResult> {
-    let files = collect_cache_files(&cache_root)?;
-    let total_bytes = files.iter().map(|file| file.size).sum::<u64>();
+    let (total_bytes, file_count) = reader_cache_index_stats().await?;
 
     Ok(ReaderCacheStatsResult {
         cache_dir: cache_root.to_string_lossy().to_string(),
         total_bytes,
-        file_count: files.len() as u32,
+        file_count,
         cache_limit_bytes,
         cache_trim_bytes: cache_trim_bytes(cache_limit_bytes),
     })

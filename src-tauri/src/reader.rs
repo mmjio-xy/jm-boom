@@ -1,4 +1,5 @@
 mod cache;
+mod cache_index;
 mod image_decode;
 mod manifest;
 mod page;
@@ -6,6 +7,7 @@ mod types;
 
 use crate::api::{ApiError, ApiErrorKind, ApiResult};
 use cache::{map_cache_error, normalize_cache_limit, reader_cache_root, reader_cache_stats};
+use cache_index::clear_reader_cache_entries;
 use manifest::clear_manifest_cache;
 use page::materialize_reader_page;
 use std::fs;
@@ -44,16 +46,16 @@ pub async fn get_comic_read_page(
     .await
 }
 
-pub fn get_reader_cache_stats(
+pub async fn get_reader_cache_stats(
     app: &AppHandle,
     cache_limit_bytes: Option<u64>,
 ) -> ApiResult<ReaderCacheStatsResult> {
     let cache_root = reader_cache_root(app)?;
     let cache_limit_bytes = normalize_cache_limit(cache_limit_bytes);
-    reader_cache_stats(cache_root, cache_limit_bytes)
+    reader_cache_stats(cache_root, cache_limit_bytes).await
 }
 
-pub fn clear_reader_cache(
+pub async fn clear_reader_cache(
     app: &AppHandle,
     cache_limit_bytes: Option<u64>,
 ) -> ApiResult<ReaderCacheStatsResult> {
@@ -64,8 +66,9 @@ pub fn clear_reader_cache(
         fs::remove_dir_all(&cache_root).map_err(map_cache_error)?;
     }
 
+    clear_reader_cache_entries().await?;
     clear_manifest_cache();
-    reader_cache_stats(cache_root, cache_limit_bytes)
+    reader_cache_stats(cache_root, cache_limit_bytes).await
 }
 
 pub fn open_reader_cache_dir(app: &AppHandle) -> ApiResult<()> {

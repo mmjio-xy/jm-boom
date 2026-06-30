@@ -189,19 +189,23 @@ fn configure_network_proxy(
 }
 
 #[tauri::command]
-fn get_reader_cache_stats(
+async fn get_reader_cache_stats(
     app: tauri::AppHandle,
     cache_limit_bytes: Option<u64>,
 ) -> Result<ReaderCacheStatsResult, String> {
-    reader::get_reader_cache_stats(&app, cache_limit_bytes).map_err(|error| error.to_string())
+    reader::get_reader_cache_stats(&app, cache_limit_bytes)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn clear_reader_cache(
+async fn clear_reader_cache(
     app: tauri::AppHandle,
     cache_limit_bytes: Option<u64>,
 ) -> Result<ReaderCacheStatsResult, String> {
-    reader::clear_reader_cache(&app, cache_limit_bytes).map_err(|error| error.to_string())
+    reader::clear_reader_cache(&app, cache_limit_bytes)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
