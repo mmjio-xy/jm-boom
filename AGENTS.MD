@@ -44,6 +44,7 @@
   - `## 其他`
 - 发布日志不需要带类似 “# JM Boom v0.2.2” 的版本号。
 - 每条发布日志记录尽量带对应 commit hash 链接，格式示例：`- 设置页进入时自动检查更新 ([abc1234](https://github.com/ppxb/jm-boom/commit/abc1234))`。
+- 发布日志尽量精炼简单一点。
 - TAURI_SIGNING_PRIVATE_KEY 用户已完成配置，发布由用户手动通过 Github Workflow 完成。
 
 ## 参考项目
