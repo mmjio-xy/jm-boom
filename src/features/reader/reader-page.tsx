@@ -31,6 +31,7 @@ export function ReaderPage({ comicId, search }: { comicId: string; search: Reade
   const isDoublePageMode = !isStripMode && readerDoublePageMode
   const pageStep = isDoublePageMode ? 2 : 1
   const stripScrollRef = useRef<HTMLDivElement | null>(null)
+  const autoReadEntryComicIdRef = useRef<string | null>(null)
   const {
     isVisible: isToolbarVisible,
     toggle: toggleToolbar,
@@ -95,6 +96,12 @@ export function ReaderPage({ comicId, search }: { comicId: string; search: Reade
   ])
 
   useEffect(() => {
+    if (autoReadEntryComicIdRef.current === comicId) {
+      return
+    }
+
+    autoReadEntryComicIdRef.current = comicId
+
     if (readerAutoReadEnabled) {
       hideToolbar()
     }
