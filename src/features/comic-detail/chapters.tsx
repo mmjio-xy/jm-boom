@@ -15,19 +15,28 @@ import {
 import type { ComicChapter } from '@/lib/api/comic'
 import { cn } from '@/lib/utils'
 import { CHAPTER_PAGE_SIZE } from './constants'
-import { SectionHeading, StatePanel } from './shared'
-import { formatChapterTitle, getVisiblePages, sortChapters } from './utils'
+import { SectionHeading } from './shared'
+import {
+  SINGLE_CHAPTER_TITLE,
+  formatChapterTitle,
+  getDisplayChapterCount,
+  getVisiblePages,
+  sortChapters
+} from './utils'
 
 export function ChaptersSection({
   albumId,
+  comicId,
   comicTitle,
   chapters
 }: {
   albumId: string
+  comicId: string
   comicTitle: string
   chapters: ComicChapter[]
 }) {
   const sortedChapters = useMemo(() => sortChapters(chapters), [chapters])
+  const displayChapterCount = getDisplayChapterCount(chapters)
   const [page, setPage] = useState(1)
   const pageCount = Math.max(1, Math.ceil(sortedChapters.length / CHAPTER_PAGE_SIZE))
   const safePage = Math.min(page, pageCount)
@@ -53,10 +62,33 @@ export function ChaptersSection({
     <section id="chapters" className="scroll-mt-8 space-y-4">
       <SectionHeading
         title="章节"
-        description={`${chapters.length} 个章节${pageCount > 1 ? `，第 ${safePage}/${pageCount} 页` : ''}`}
+        description={`${displayChapterCount} 个章节${pageCount > 1 ? `，第 ${safePage}/${pageCount} 页` : ''}`}
       />
       {sortedChapters.length === 0 ? (
-        <StatePanel title="暂无章节" description="当前作品可能是单行本。" />
+        <Link
+          to="/reader/$comicId"
+          params={{ comicId }}
+          search={{
+            title: comicTitle,
+            chapter: SINGLE_CHAPTER_TITLE,
+            albumId,
+            fromDetail: '1',
+            pageIndex: '0',
+            nextId: '',
+            nextChapter: ''
+          }}
+          className="block"
+        >
+          <Card size="sm" className="py-0 transition-colors hover:bg-muted/40">
+            <CardContent className="flex items-center justify-between gap-4 p-4">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{SINGLE_CHAPTER_TITLE}</div>
+                <div className="text-xs text-muted-foreground">单行本</div>
+              </div>
+              <Badge variant="outline">JM {comicId}</Badge>
+            </CardContent>
+          </Card>
+        </Link>
       ) : (
         <>
           <div className="space-y-2">

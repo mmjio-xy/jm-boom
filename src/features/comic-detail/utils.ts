@@ -1,5 +1,7 @@
 import type { ComicChapter } from '@/lib/api/comic'
 
+export const SINGLE_CHAPTER_TITLE = '单章'
+
 const CHINESE_DATE_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
   month: 'long',
@@ -35,6 +37,10 @@ export function formatChapterTitle(chapter: ComicChapter, index: number) {
   }
 
   return chapter.sort ? `第 ${chapter.sort} 章` : `章节 ${index + 1}`
+}
+
+export function getDisplayChapterCount(chapters: ComicChapter[]) {
+  return Math.max(chapters.length, 1)
 }
 
 export function getNextChapter(currentId: string, chapters: ComicChapter[]) {

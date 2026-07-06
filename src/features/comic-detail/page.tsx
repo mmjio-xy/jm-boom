@@ -22,7 +22,7 @@ import {
 import { ComicHero } from './hero'
 import { RelatedPanel } from './related'
 import { BackTop, ComicDetailSkeleton, StatePanel } from './shared'
-import { resolveAlbumId, sortChapters } from './utils'
+import { SINGLE_CHAPTER_TITLE, resolveAlbumId, sortChapters } from './utils'
 import { useSettingsStore } from '@/stores/settings-store'
 import {
   ComicDownloadDrawer,
@@ -79,7 +79,7 @@ function ComicDetailView({ comic }: { comic: ComicDetail }) {
       return [
         {
           chapterId: comic.id,
-          title: '正文',
+          title: SINGLE_CHAPTER_TITLE,
           order: 1
         }
       ]
@@ -181,7 +181,12 @@ function ComicDetailView({ comic }: { comic: ComicDetail }) {
 
       <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-8">
         <div className="min-w-0">
-          <ChaptersSection albumId={albumId} comicTitle={comic.title} chapters={comic.series} />
+          <ChaptersSection
+            albumId={albumId}
+            comicId={comic.id}
+            comicTitle={comic.title}
+            chapters={comic.series}
+          />
         </div>
 
         <aside className="sticky top-8 h-fit">

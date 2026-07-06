@@ -29,7 +29,7 @@ export function ComicCover({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-2xl bg-muted',
+        'relative overflow-hidden rounded-md bg-muted',
         ratio === 'square' ? 'aspect-square' : 'aspect-3/4',
         className
       )}

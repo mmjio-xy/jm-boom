@@ -43,7 +43,7 @@ export function ComicDetailSkeleton() {
   return (
     <div className="space-y-10">
       <section className="grid grid-cols-[240px_minmax(0,1fr)] gap-8">
-        <div className="aspect-3/4 animate-pulse rounded-2xl bg-muted" />
+        <div className="aspect-3/4 animate-pulse rounded-md bg-muted" />
         <div className="space-y-5 py-1">
           <div className="h-5 w-56 animate-pulse rounded bg-muted" />
           <div className="space-y-3">

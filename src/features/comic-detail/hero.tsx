@@ -17,7 +17,14 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import type { ComicChapter, ComicDetail } from '@/lib/api/comic'
 import { ComicCover } from './shared'
-import { formatChapterTitle, formatNumber, resolveAlbumId, sortChapters } from './utils'
+import {
+  SINGLE_CHAPTER_TITLE,
+  formatChapterTitle,
+  formatNumber,
+  getDisplayChapterCount,
+  resolveAlbumId,
+  sortChapters
+} from './utils'
 
 export function ComicHero({
   comic,
@@ -128,7 +135,7 @@ function resolveStartReadingTarget(comic: ComicDetail) {
   if (!firstChapter) {
     return {
       readId: comic.id,
-      chapterTitle: '正文',
+      chapterTitle: SINGLE_CHAPTER_TITLE,
       nextChapter: null
     }
   }
@@ -168,7 +175,12 @@ function StatsRow({ comic, onCommentsClick }: { comic: ComicDetail; onCommentsCl
       icon: MessageCircleIcon,
       onClick: onCommentsClick
     },
-    { id: 'chapters', label: '章节', value: formatNumber(comic.series.length), icon: LayersIcon }
+    {
+      id: 'chapters',
+      label: '章节',
+      value: formatNumber(getDisplayChapterCount(comic.series)),
+      icon: LayersIcon
+    }
   ]
 
   return (
