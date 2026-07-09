@@ -6,17 +6,18 @@ import {
   LoaderCircleIcon,
   PauseIcon,
   PlayIcon,
-  RotateCcwIcon
+  RotateCcwIcon,
+  Trash2Icon
 } from 'lucide-react'
 
 import { OverflowTooltip } from '@/components/overflow-tooltip'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import type { DownloadTask, DownloadTaskStatus } from '@/lib/api/download'
 import { formatBytes, formatDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { DeleteTaskDialog } from './delete-task-dialog'
 
 export function DownloadTaskCard({
   task,
@@ -97,9 +98,16 @@ export function DownloadTaskCard({
               </Button>
             ) : null}
             {canRemove ? (
-              <DeleteTaskDialog
-                comicTitle={task.comicTitle}
-                disabled={isRemoving}
+              <ConfirmDialog
+                trigger={
+                  <Button variant="ghost" size="icon" disabled={isRemoving}>
+                    <Trash2Icon className="size-4" />
+                  </Button>
+                }
+                title="删除下载任务"
+                description={`将删除"${task.comicTitle}"的下载任务和已保存文件，此操作不可撤销。`}
+                confirmText="删除"
+                variant="destructive"
                 onConfirm={onRemove}
               />
             ) : null}

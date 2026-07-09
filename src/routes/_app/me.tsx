@@ -1,12 +1,12 @@
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { BadgeCheckIcon } from 'lucide-react'
+import { BadgeCheckIcon, LogOutIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { PageHeader } from '@/components/page-header'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { LogoutConfirmDialog } from '@/features/me/logout-confirm-dialog'
 import { useMeSignIn } from '@/features/me/use-me-sign-in'
 import { useSettingsStore } from '@/stores/settings-store'
 import { useUserStore } from '@/stores/user-store'
@@ -77,7 +77,20 @@ function MePage() {
                   ? '已签到'
                   : '未签到'}
             </Button>
-            <LogoutConfirmDialog onConfirm={() => void handleLogout()} />
+            <ConfirmDialog
+              trigger={
+                <Button variant="outline" size="sm">
+                  <LogOutIcon className="size-4" />
+                  登出
+                </Button>
+              }
+              icon={<LogOutIcon className="size-5 text-destructive" />}
+              title="退出登录"
+              description="退出后会清除当前账号会话，并返回首页。"
+              confirmText="确认退出"
+              variant="destructive"
+              onConfirm={() => void handleLogout()}
+            />
           </div>
         </PageHeader>
 
