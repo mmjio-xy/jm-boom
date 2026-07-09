@@ -78,13 +78,13 @@ function HistoryPage() {
     removeMany(comicIds)
     setSelectedComicIds(new Set())
     setIsSelecting(false)
-    toast.success(`已删除 ${comicIds.length} 条阅读记录`)
+    toast.success(`已删除 ${comicIds.length} 条历史观看记录`)
   }
 
   return (
     <main className="relative min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-6xl space-y-6 p-[32px_32px_16px_96px]">
-        <PageHeader title="历史观看" desc="本地保存的历史阅读进度">
+        <PageHeader title="历史观看" desc="本地保存的历史观看进度">
           {isSelecting ? (
             <>
               <Button
@@ -128,7 +128,7 @@ function HistoryPage() {
                 disabled={sortedItems.length === 0}
                 onConfirm={() => {
                   clear()
-                  toast.success('阅读记录已清除')
+                  toast.success('历史观看记录已清除')
                 }}
               />
             </>
@@ -136,7 +136,7 @@ function HistoryPage() {
         </PageHeader>
 
         {sortedItems.length === 0 ? (
-          <EmptyState emoji="(˙ᯅ˙)" title="暂无阅读记录" />
+          <EmptyState emoji="(˙ᯅ˙)" title="暂无历史观看记录" />
         ) : (
           <div className="grid grid-cols-4 gap-6">
             {sortedItems.map(item => (
